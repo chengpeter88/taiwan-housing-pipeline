@@ -1,5 +1,7 @@
 # 臺北買賣季檔盤點與開工規格
 
+> **歷史紀錄**：這是 2026-11-15 對單一季檔（114S4）的盤點，用來推導車位、住宅用途等清理規則。文中提到的 DuckDB 原型已移除；現行資料範圍為 12 季，見 [staging.md](staging.md) 與 [raw_loading.md](raw_loading.md)。
+
 檢查日期：2026-11-15。正式架構仍以 BigQuery、dbt Core、後續 Airflow 與 Looker Studio 為準。現有 DuckDB 程式是先前本機原型，不代表 BigQuery 階段已完成。這次僅新增獨立 pandas 盤點腳本，沒有改寫既有展示資料。
 
 ## 資料來源與範圍
@@ -68,4 +70,4 @@
 .venv\Scripts\python.exe -m pytest tests/test_profile_dataset.py -q
 ```
 
-獨立環境只需 `requirements-profile.txt`；不需要裝 dbt 或 Streamlit。完整機器可讀結果寫入 `data/dataset_profile.json`，不含地址或逐筆交易資料。官方來源：https://plvr.land.moi.gov.tw/DownloadOpenData 。
+使用專案的 `.venv` 即可，盤點腳本只需要 pandas。完整機器可讀結果寫入 `data/dataset_profile.json`，不含地址或逐筆交易資料。官方來源：https://plvr.land.moi.gov.tw/DownloadOpenData 。

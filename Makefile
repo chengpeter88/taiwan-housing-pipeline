@@ -1,7 +1,7 @@
-.PHONY: install test app
+.PHONY: install test dbt-build
 install:
 	uv pip sync requirements.lock
 test:
 	python -m pytest -q
-app:
-	python -m streamlit run app.py
+dbt-build:
+	dbt build --project-dir analytics_bigquery --profiles-dir analytics_bigquery

@@ -4,11 +4,8 @@ __pycache__/
 landing/
 data/
 reports/
-analytics/target/
-analytics/logs/
 analytics_bigquery/target/
 analytics_bigquery/logs/
-*.duckdb*
 *.tmp
 *.zip
 orchestration/.env

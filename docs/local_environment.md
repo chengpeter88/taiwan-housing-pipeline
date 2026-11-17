@@ -20,8 +20,8 @@ Google Cloud CLI 安裝在 `E:/coding/tools/google-cloud-sdk`，版本 593.0.0�
 
 - `dbt-core`、`dbt-bigquery`：正式 BigQuery 模型與測試。
 - `google-cloud-bigquery`、`pandas`、`pyarrow`：官方載入介面與資料處理。
+- `requests`：下載官方季檔。
 - `pytest`：Python 測試。
-- `dbt-duckdb`、`duckdb`、`streamlit`：保留既有本機原型可執行。
 
 Google AI、Dataproc 等相依套件由 dbt-bigquery 的依賴鏈帶入；安裝套件不會啟用對應雲端服務。
 
@@ -68,24 +68,21 @@ ADC 存在 `%APPDATA%\gcloud\application_default_credentials.json`，與程式�
 
 輸出 `1` 表示 ADC、專案與 BigQuery 權限正常。此查詢不讀資料表、不建立資源。2026-11-15 已通過。
 
-### dbt BigQuery target
+### dbt BigQuery 設定
 
-`analytics/profiles.yml` 新增 `bq` target，預設 target 仍為 DuckDB `local`：
+dbt 專案在 `analytics_bigquery/`，連線設定是同目錄的 `profiles.yml`：
 
 | 設定 | 值 | 說明 |
 | --- | --- | --- |
 | method | `oauth` | 使用 ADC，檔案內無機密 |
-| dataset | `housing_dev` | 小資料驗證用 |
-| location | `asia-east1` | dataset 建立後不可更改 |
-| maximum_bytes_billed | 1 GB | 單一查詢超量即失敗，防止意外費用 |
-
-驗證連線（只檢查設定，不建立 dataset）：
+| project | `taiwan-household` | GCP 專案 |
+| dataset | `housing_dev` | staging 與 marts |
+| location | `US` | 與 `housing_raw` 相同；dataset 建立後不可更改 |
 
 ```powershell
-cd analytics
-..\.venv\Scripts\dbt.exe debug --profiles-dir . --target bq
+.venv\Scripts\dbt.exe debug --project-dir analytics_bigquery --profiles-dir analytics_bigquery
 ```
 
-尚未執行此驗證，也尚未建立任何雲端 dataset。下一步依 [資料集盤點](dataset_review.md) 計畫：建立 `housing_dev` 與 `raw` dataset、載入少量資料、跑通一個 dbt model。
+輸出 `All checks passed!` 表示 dbt 可以連上 BigQuery。
 
 官方參考：https://docs.cloud.google.com/docs/authentication/set-up-adc-local-dev-environment
