@@ -7,3 +7,4 @@ pandas==2.3.3
 dbt-bigquery>=1.11,<2
 google-cloud-bigquery>=3,<4
 pyarrow>=19,<26
+requests>=2.32,<3

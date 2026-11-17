@@ -42,7 +42,8 @@ def read_sales(payload):
 
 
 def roc_dates(values):
-    values = values.str.strip().where(values.str.strip().str.fullmatch(r'[0-9]{7}'))
+    values = values.str.strip().where(values.str.strip().str.fullmatch(r'[0-9]{6,7}'))
+    values = values.str.pad(7, side='left', fillchar='0')
     years = (pd.to_numeric(values.str[:3], errors='coerce') + 1911).astype('Int64').astype('string')
     return pd.to_datetime(years + values.str[3:], format='%Y%m%d', errors='coerce')
 

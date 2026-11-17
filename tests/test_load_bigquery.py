@@ -168,6 +168,7 @@ def test_fetch_season_downloads_and_writes_index(tmp_path):
     assert index['sha256'] == path.parent.name
     assert index['url'] == lb.season_url('115S3')
     url, kwargs = session.calls[0]
+    assert url == lb.season_url('115S3')
     assert kwargs.get('stream') is True and kwargs.get('timeout')
 
 
