@@ -4,7 +4,7 @@
 
 ## 快速開始
 
-本機環境統一使用 Python 3.12 與 uv；BigQuery 套件已加入，現有管線仍是 DuckDB 原型。GCP 登入與 BigQuery 最小連線驗證已完成，正式雲端模型尚未完成。完整環境說明見 [本機環境](docs/local_environment.md)。Windows PowerShell：
+專案有兩條管線：本節的 DuckDB 本機原型（單季、Streamlit 展示），以及下一節的 BigQuery 管線（台北 12 季、dbt、Airflow），後者是目前的主線。本機環境統一使用 Python 3.12 與 uv，完整說明見 [本機環境](docs/local_environment.md)。DuckDB 原型的 Windows PowerShell 指令：
 
 ```powershell
 cd E:\coding\taiwan-housing-pipeline
@@ -21,6 +21,37 @@ uv pip sync requirements.lock --python .venv/Scripts/python.exe
 `--min-date` 預設為 `2025-06-01`，用來重現原規劃文件的樣本；分析其他期間時請明確修改。`--as-of` 為判斷未來日期的基準，不指定時採執行機器的今天。季檔依登記期間收錄，並不等於交易季度，晚登記的交易可能很早。
 
 `--source-date` 是來源快照的排序日期，不是本機載入日期。本包使用 `build_time.xml` 的買賣登記截止日 `2025-12-10`；這不是已驗證的發布日期。跨期、歷史回補及更正版需使用一致且可信的快照日期。相同日期時以 batch_id、來源列序決定保留版本。
+
+## BigQuery 管線（主線）
+
+台北市買賣實價登錄 112S4–115S3 共 12 季（73,133 列），從內政部官方網址下載，經 BigQuery、dbt 到 Airflow 3（Docker）。季別與分析期間（2023-10-01 ~ 2026-03-31）只在 [config/seasons.json](config/seasons.json) 設定一次。
+
+```mermaid
+flowchart LR
+    A[官方季檔<br>DownloadSeason] --> B[載入器<br>下載・驗證・快取]
+    B --> C[housing_raw<br>lvr_season_a_季別 ×12]
+    C --> D[dbt staging<br>型別・排除原因]
+    D --> E[fct_housing_deal]
+    E --> F[agg_district_month_price]
+    G[Airflow DAG<br>手動觸發] -.-> B
+    G -.-> D
+```
+
+```powershell
+# 逐季載入（也可交給 Airflow DAG）
+.venv\Scripts\python.exe -m scripts.load_bigquery --season 115S3
+# 建模與測試
+.venv\Scripts\dbt.exe build --project-dir analytics_bigquery --profiles-dir analytics_bigquery
+```
+
+| 文件 | 內容 |
+| --- | --- |
+| [docs/raw_loading.md](docs/raw_loading.md) | 下載、驗證、每季一表、sandbox 到期與重建 |
+| [docs/staging.md](docs/staging.md) | 分析期間的依據、排除規則、unit tests |
+| [docs/marts.md](docs/marts.md) | 交易明細與行政區月中位數、驗證結果 |
+| [docs/airflow.md](docs/airflow.md) | DAG 流程、重試策略、Docker 啟動與驗收紀錄 |
+
+2026-11-17 驗證：pytest 67 項、dbt build 27 項通過；BigQuery 各季列數與官方 ZIP 一致；pandas 獨立重算 360 組月中位數完全一致；Airflow 容器全量執行、重跑與錯誤季別情境皆符合預期。
 
 ## 架構與資料粒度
 
@@ -86,7 +117,7 @@ flowchart LR
 
 本機單一寫入程序使用，請勿同時執行多個 pipeline；Windows 若有其他程序持續開啟資料庫，替換可能被鎖住，關閉後重跑即可。Streamlit 每次查詢後關閉連線。展示庫以同一磁碟原子替換；JSON 報告另寫，兩者不是跨檔案交易。
 
-目前未做遠端部署、通知、定時更新、刪除撤回案件同步或來源 SLA。最新批次未出現的舊交易不會自動刪除。更完整的當期更新需以來源撤回規則與定期全量重建補足。BigQuery 遷移也需調整 adapter、載入、日期與中位數語法、發布流程，不只有更換連線。
+目前未做遠端部署、通知、定時更新、刪除撤回案件同步或來源 SLA。最新批次未出現的舊交易不會自動刪除。更完整的當期更新需以來源撤回規則與定期全量重建補足。BigQuery 管線已完成載入、建模與手動觸發的 Airflow DAG，尚缺展示發布閘門與自動排程。
 
 | WBS | 下一步 | 完成標準 |
 | --- | --- | --- |
@@ -94,7 +125,7 @@ flowchart LR
 | 2 | GitHub CI 與展示 | 遠端 CI 綠燈；他人依 README 重跑；選定公開展示方式 |
 | 3 | 排程與回補 | 下載驗證後設定排程；三個來源期別回補，驗證順序不影響保留版本 |
 | 4 | CDP 模擬 | 標示合成事件、建立使用者與區域／價格偏好分群，加入規則測試 |
-| 5 | 選用雲端版 | BigQuery／Airflow 或 Dagster；成本與資料發布機制驗證 |
+| 5 | 雲端版 | BigQuery、dbt 與 Airflow DAG 已完成（12 季）；待補資料發布機制、CI 執行 dbt 與自動排程 |
 
 ## 來源與授權
 
