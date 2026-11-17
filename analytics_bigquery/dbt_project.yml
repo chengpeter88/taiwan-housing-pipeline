@@ -7,6 +7,9 @@ vars:
   seasons: ['112S4', '113S1', '113S2', '113S3', '113S4', '114S1', '114S2', '114S3', '114S4', '115S1', '115S2', '115S3']
   min_transaction_date: '2023-10-01'
   as_of_date: '2026-03-31'
+  # Gold: cells with fewer deals are flagged is_low_sample; budget table looks back N months.
+  low_sample_threshold: 30
+  budget_months: 12
 models:
   taiwan_housing_bigquery:
     +materialized: table

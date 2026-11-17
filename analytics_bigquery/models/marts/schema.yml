@@ -1,14 +1,70 @@
 version: 2
+
+# Gold layer contract. Grain of every aggregate starts with city_code.
+# Low-sample threshold: var('low_sample_threshold'). Ratios are fractions (0.05 = 5%).
 models:
   - name: fct_housing_deal
-    description: Eligible housing transactions of all declared uses; filter is_residential for residential indicators.
+    description: >
+      One row per eligible housing transaction (all declared uses); filter is_residential for
+      residential indicators. Business derivations only; typing happens in silver.
     columns:
       - name: source_row_key
         data_tests: [not_null, unique]
       - name: price_per_ping
+        description: (price - parking price) / (area - parking area) * 3.30579
         data_tests: [not_null]
       - name: transaction_date
         data_tests: [not_null]
+      - name: transaction_month
+        data_tests: [not_null]
+      - name: transaction_quarter
+        data_tests: [not_null]
+      - name: total_price_incl_parking_10k
+        description: Total price including any parking, in 10k NTD. Used for budget bands.
+        data_tests: [not_null]
+      - name: housing_price_10k
+        description: Price excluding parking, in 10k NTD.
+        data_tests: [not_null]
+      - name: building_type_group
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [tower, mansion, apartment, townhouse, other]
+      - name: completion_date
+        description: Parsed in silver; NULL when missing or invalid.
+      - name: building_age_years
+        description: Completed full years between completion and transaction; NULL when unknown or completion after transaction.
+      - name: age_band
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['0-10', '10-30', '30+', unknown]
+      - name: area_band
+        description: Band of housing_area_ping (excluding parking), left-closed.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['<15', '15-25', '25-35', '35-50', '50+']
+      - name: budget_band
+        description: Band of total_price_incl_parking_10k, left-closed.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['<1000', '1000-1500', '1500-2000', '2000-3000', '3000-5000', '5000+']
+      - name: room_count
+        description: Rooms as integer from silver; 0 is kept as reported.
+      - name: has_elevator
+        description: TRUE / FALSE from silver; NULL when not reported.
+      - name: has_management
+        description: TRUE / FALSE from silver; NULL when not reported.
+      - name: is_parking_included
+        description: parking_status = separately_reported.
+        data_tests: [not_null]
+
   - name: agg_district_month_price
     description: Exact median and count of residential deals per city, district and transaction month. Missing months are not zero-price observations.
     columns:
@@ -16,3 +72,89 @@ models:
         data_tests: [not_null]
       - name: deal_count
         data_tests: [not_null]
+
+  - name: agg_district_quarter_price
+    description: >
+      Residential deals per city, district and transaction quarter with exact quartiles of
+      price_per_ping and year-over-year change of the median (joined by date, not LAG).
+    columns:
+      - name: deal_count
+        data_tests: [not_null]
+      - name: median_price_per_ping
+        data_tests: [not_null]
+      - name: p25_price_per_ping
+        data_tests: [not_null]
+      - name: p75_price_per_ping
+        data_tests: [not_null]
+      - name: prev_year_median_price_per_ping
+        description: Median of the same quarter one year earlier; NULL when that quarter has no deals.
+      - name: median_yoy_ratio
+        description: median / prev_year_median - 1; NULL when the previous year is missing or either side is low sample.
+      - name: is_low_sample
+        data_tests: [not_null]
+
+  - name: agg_district_segment_price
+    description: >
+      Residential deals per city, district, building type group and age band over the whole
+      analysis window (time pooled to keep samples). Empty cells are absent, not zero.
+    columns:
+      - name: deal_count
+        data_tests: [not_null]
+      - name: median_price_per_ping
+        data_tests: [not_null]
+      - name: p25_price_per_ping
+        data_tests: [not_null]
+      - name: p75_price_per_ping
+        data_tests: [not_null]
+      - name: median_total_price_incl_parking_10k
+        data_tests: [not_null]
+      - name: is_low_sample
+        data_tests: [not_null]
+
+  - name: agg_district_budget
+    description: >
+      What a budget buys: residential deals in the latest var('budget_months') months up to
+      as_of_date, per city, district and budget band (total price including parking).
+    columns:
+      - name: deal_count
+        data_tests: [not_null]
+      - name: share_of_district_deals
+        description: deal_count / district deals in the same window.
+        data_tests: [not_null]
+      - name: median_housing_area_ping
+        data_tests: [not_null]
+      - name: median_building_age_years
+        description: Over deals with known age only (see age_known_count).
+      - name: age_known_count
+        data_tests: [not_null]
+      - name: median_room_count
+        description: percentile_disc over room_count > 0 only (see room_known_count).
+      - name: room_known_count
+        data_tests: [not_null]
+      - name: elevator_share
+        description: Share of TRUE among non-NULL has_elevator.
+      - name: parking_included_share
+        data_tests: [not_null]
+      - name: median_price_per_ping
+        data_tests: [not_null]
+      - name: is_low_sample
+        data_tests: [not_null]
+
+  - name: agg_city_month_market
+    description: >
+      City-wide residential market per month: volume, exact monthly median and a rolling
+      3-month median recomputed from individual deals (not an average of monthly medians).
+    columns:
+      - name: deal_count
+        data_tests: [not_null]
+      - name: median_price_per_ping
+        data_tests: [not_null]
+      - name: rolling_3m_median_price_per_ping
+        data_tests: [not_null]
+      - name: rolling_3m_deal_count
+        data_tests: [not_null]
+      - name: is_rolling_window_complete
+        description: FALSE for the first two months of the window (fewer than 3 months available).
+        data_tests: [not_null]
+      - name: deal_count_yoy_ratio
+        description: deal_count / same month one year earlier - 1; NULL when missing.

@@ -81,3 +81,32 @@ unit_tests:
         - {source_row_key: 'h1:5', transaction_date: null}
         - {source_row_key: 'h1:6', transaction_date: null}
         - {source_row_key: 'h1:7', transaction_date: null}
+
+  - name: stg_lvr_sale_types_building_attributes
+    model: stg_lvr_sale
+    overrides:
+      vars:
+        seasons: ['115S1']
+        min_transaction_date: '2025-06-01'
+        as_of_date: '2026-03-31'
+    given:
+      - input: source('bronze', 'lvr_season_a')
+        rows:
+          - {<<: *base, source_row_number: 1, serial_no: 'B1', completion_date_roc: '0650921',
+             rooms: '3', elevator: '有', management: '無'}
+          - {<<: *base, source_row_number: 2, serial_no: 'B2', completion_date_roc: '',
+             rooms: '', elevator: '', management: ''}
+          # 6 月 31 日不存在
+          - {<<: *base, source_row_number: 3, serial_no: 'B3', completion_date_roc: '0690631',
+             rooms: '0', elevator: '無', management: '有'}
+          - {<<: *base, source_row_number: 4, serial_no: 'B4', completion_date_roc: '980806',
+             rooms: 'x', elevator: ' 有 ', management: '無'}
+          - {<<: *base, source_row_number: 5, serial_no: 'B5', completion_date_roc: '04501',
+             rooms: ' 2 ', elevator: '有', management: '有'}
+    expect:
+      rows:
+        - {source_row_key: 'h1:1', completion_date: '1976-09-21', room_count: 3, has_elevator: true, has_management: false}
+        - {source_row_key: 'h1:2', completion_date: null, room_count: null, has_elevator: null, has_management: null}
+        - {source_row_key: 'h1:3', completion_date: null, room_count: 0, has_elevator: false, has_management: true}
+        - {source_row_key: 'h1:4', completion_date: '2009-08-06', room_count: null, has_elevator: true, has_management: false}
+        - {source_row_key: 'h1:5', completion_date: null, room_count: 2, has_elevator: true, has_management: true}
