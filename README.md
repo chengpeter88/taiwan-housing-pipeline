@@ -41,8 +41,10 @@ uv pip sync requirements.lock --python .venv/Scripts/python.exe
 .venv\Scripts\python.exe -m scripts.load_bigquery --season 115S3
 # 建模與資料測試
 .venv\Scripts\dbt.exe build --project-dir analytics_bigquery --profiles-dir analytics_bigquery
-# Python 測試
+# Python 測試、lint 與格式檢查（與 CI 相同）
 .venv\Scripts\python.exe -m pytest -q
+.venv\Scriptsuff.exe check .
+.venv\Scriptslack.exe --check .
 ```
 
 Linux／macOS 改用 `.venv/bin/python`。
@@ -73,12 +75,12 @@ Linux／macOS 改用 `.venv/bin/python`。
 
 2026-11-17 驗證結果：
 
-- pytest 67 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性。
+- pytest 68 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性。
 - `dbt build` 24 項通過（3 個模型）：2 組 unit tests 以假資料覆蓋全部 12 種排除原因與 6 位數日期；19 個資料測試涵蓋唯一鍵、允許值、季別完整性、列數對帳、價格公式與月粒度。
 - BigQuery 12 張季表的列數與官方 ZIP 逐季一致；pandas 從 fact 獨立重算 360 組月中位數，結果完全一致。
 - Airflow 3.4.0 容器：12 季全量執行成功、同參數重跑筆數不變、未發布與格式錯誤的季別在對應任務失敗且不重試。
 
-`.github/workflows/ci.yml` 在每次 push 執行 pytest，不下載官方檔，也不需要雲端金鑰。dbt 需要 BigQuery 連線，目前只在本機與 Airflow 執行。
+`.github/workflows/ci.yml` 在 push 到 main 與每個 PR 時依序執行 `ruff check`、`black --check` 與 pytest，不下載官方檔，也不需要雲端金鑰。格式與 lint 設定在 `pyproject.toml`（行寬 100、保留單引號）。dbt 需要 BigQuery 連線，目前只在本機與 Airflow 執行。
 
 ## 限制與下一步
 

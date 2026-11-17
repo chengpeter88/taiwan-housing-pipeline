@@ -87,3 +87,15 @@ def test_dbt_project_and_profiles_are_ascii():
     # dbt 在 Windows 以系統編碼（cp950）讀這兩個檔案計算雜湊，非 ASCII 字元會讓 dbt 崩潰
     for path in ['analytics_bigquery/dbt_project.yml', 'analytics_bigquery/profiles.yml']:
         assert (ROOT / path).read_bytes().isascii(), path
+
+
+def test_ci_runs_lint_format_and_tests():
+    ci = _yaml('.github/workflows/ci.yml')
+    commands = ' '.join(step.get('run', '') for job in ci['jobs'].values() for step in job['steps'])
+    assert 'ruff check' in commands
+    assert 'black --check' in commands
+    assert 'pytest' in commands
+    # push 只在 main 觸發，PR 由 pull_request 觸發，避免同一次變更跑兩次
+    triggers = ci[True] if True in ci else ci['on']  # PyYAML 會把 on 解析成 True
+    assert triggers['push']['branches'] == ['main']
+    assert 'pull_request' in triggers

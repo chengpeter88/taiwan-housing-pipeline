@@ -1,19 +1,28 @@
 name: Pipeline CI
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  # 同一分支連續 push 時取消舊的執行
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
       - uses: astral-sh/setup-uv@v6
-      - run: uv venv --python 3.12
-      - run: uv pip sync requirements.lock
-      - run: .venv/bin/python -m pytest -q
+      - name: Install locked dependencies
+        run: |
+          uv venv --python 3.12
+          uv pip sync requirements.lock
+      - name: Lint (ruff)
+        run: .venv/bin/ruff check .
+      - name: Format check (black)
+        run: .venv/bin/black --check .
+      - name: Tests (pytest)
+        run: .venv/bin/python -m pytest -q
