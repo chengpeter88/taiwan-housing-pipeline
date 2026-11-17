@@ -321,6 +321,17 @@ def test_main_validate_only_with_local_zip(tmp_path, monkeypatch, capsys):
     assert printed['season'] == '115S3' and printed['source_rows'] == 3
 
 
+def test_main_stdout_json_is_ascii_safe(tmp_path, capsys):
+    # Windows 主控台預設 cp950，非 ASCII 字元會被轉成亂碼；給程式解析的 stdout 必須是純 ASCII
+    source = tmp_path / 'in.zip'
+    source.write_bytes(make_zip())
+    assert lb.main(['--season', '115S3', '--zip', str(source), '--validate-only',
+                    '--landing', str(tmp_path / 'landing')]) == 0
+    out = capsys.readouterr().out
+    assert out.isascii()
+    assert '登記日期' in json.loads(out)['source_period_xml']
+
+
 def test_main_period_mismatch_exits_3(tmp_path):
     source = tmp_path / 'in.zip'
     source.write_bytes(make_zip(build_time=(FIXTURES / '115S2.xml').read_bytes()))

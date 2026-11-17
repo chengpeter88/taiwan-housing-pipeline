@@ -374,7 +374,8 @@ def main(argv: list[str] | None = None) -> int:
     except SourceValidationError as exc:
         LOGGER.error('Source validation failed: %s', exc)
         return 3
-    sys.stdout.write(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+    # stdout 給程式解析：用純 ASCII（\uXXXX 跳脫），不受 Windows 主控台 cp950 編碼影響
+    sys.stdout.write(json.dumps(result, ensure_ascii=True, indent=2) + '\n')
     return 0
 
 
