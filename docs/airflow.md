@@ -37,12 +37,12 @@ DAG 原始碼不寫死任何季別或日期，新季別只需改 `config/seasons
 
 ```powershell
 Copy-Item orchestration/.env.example orchestration/.env
-# 編輯 GCP_ADC_PATH（本機 ADC JSON 路徑）、POSTGRES_PASSWORD；AIRFLOW_PORT 預設 8081
+# 編輯 GCP_ADC_PATH（本機 ADC JSON 路徑）；AIRFLOW_PORT 預設 8081
 docker compose --env-file orchestration/.env -f orchestration/compose.yml build airflow
 docker compose --env-file orchestration/.env -f orchestration/compose.yml up -d
 ```
 
-瀏覽器開啟 http://localhost:8081。SimpleAuthManager 的 admin 密碼在首次啟動時產生，見 `docker compose ... logs airflow`。網頁只綁定 127.0.0.1。
+瀏覽器開啟 http://localhost:8081，帳號 `admin`、密碼 `admin`。Postgres 密碼也是 `admin`。這是本機自用的簡單設定，寫在 `compose.yml`：網頁只綁定 127.0.0.1，Postgres 不對外開埠。要給別人用或部署到伺服器前，必須改成從 `.env` 讀取的強密碼。
 
 ```powershell
 # 指令列觸發（會實際下載並讀寫 BigQuery）

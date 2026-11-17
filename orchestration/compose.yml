@@ -4,7 +4,8 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      # 本機自用的簡單密碼；Postgres 不對外開埠，只有 Docker 內網的 Airflow 連得到
+      POSTGRES_PASSWORD: admin
       POSTGRES_DB: airflow
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -19,7 +20,14 @@ services:
     build:
       context: ..
       dockerfile: orchestration/Dockerfile
-    command: standalone
+    # 啟動前寫入登入密碼檔（admin / admin）。Airflow 會以寫入模式開啟此檔，
+    # 所以不能用唯讀掛載，改由容器內的 airflow 使用者在啟動時產生。
+    command:
+      - bash
+      - -c
+      - |
+        printf '{"admin": "admin"}' > /opt/airflow/simple_auth_manager_passwords.json
+        exec airflow standalone
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,9 +38,11 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
       AIRFLOW__CORE__PARALLELISM: '1'
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${POSTGRES_PASSWORD}@postgres/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:admin@postgres/airflow
       AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
+      # 格式為「使用者:角色」；登入密碼由上方 command 寫入的密碼檔指定（admin / admin）
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/simple_auth_manager_passwords.json
       AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES: '1'
       AIRFLOW__API__WORKERS: '1'
       GOOGLE_APPLICATION_CREDENTIALS: /opt/credentials/adc.json
