@@ -1,0 +1,3 @@
+# Standalone dataset review; no dbt, Streamlit or cloud credentials required.
+pandas==2.3.3
+pytest==8.4.2

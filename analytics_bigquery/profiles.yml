@@ -1,0 +1,12 @@
+taiwan_housing_bigquery:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: taiwan-household
+      dataset: housing_dev
+      location: US
+      threads: 1
+      job_execution_timeout_seconds: 60
+      job_retries: 0

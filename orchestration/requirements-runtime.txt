@@ -1,0 +1,6 @@
+# Versions resolved under the project's requirements.lock constraints.
+dbt-core
+dbt-bigquery
+google-cloud-bigquery
+pandas
+pyarrow

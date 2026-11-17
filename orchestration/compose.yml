@@ -1,0 +1,67 @@
+name: housing-airflow
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U airflow -d airflow']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+    cpus: 0.5
+  airflow:
+    build:
+      context: ..
+      dockerfile: orchestration/Dockerfile
+    command: standalone
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:8080:8080'
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__PARALLELISM: '1'
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${POSTGRES_PASSWORD}@postgres/airflow
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+      AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES: '1'
+      AIRFLOW__API__WORKERS: '1'
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/credentials/adc.json
+      GOOGLE_CLOUD_PROJECT: taiwan-household
+      HOUSING_PROJECT_DIR: /opt/housing
+      HOUSING_PYTHON: /opt/housing-venv/bin/python
+      DBT_TARGET_PATH: /opt/housing/data/dbt_target
+      DBT_LOG_PATH: /opt/housing/data/dbt_logs
+    volumes:
+      - airflow_home:/opt/airflow
+      - ./dags:/opt/airflow/dags:ro
+      - ../scripts:/opt/housing/scripts:ro
+      - ../config:/opt/housing/config:ro
+      - ../analytics_bigquery:/opt/housing/analytics_bigquery:ro
+      - ../data:/opt/housing/data
+      - type: bind
+        source: ${GCP_ADC_PATH:?Set GCP_ADC_PATH in .env}
+        target: /opt/credentials/adc.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOUSING_ZIP_PATH:?Set HOUSING_ZIP_PATH in .env}
+        target: /opt/input/lvr_landcsv.zip
+        read_only: true
+        bind:
+          create_host_path: false
+    mem_limit: 4g
+    cpus: 2
+volumes:
+  postgres_data:
+  airflow_home:

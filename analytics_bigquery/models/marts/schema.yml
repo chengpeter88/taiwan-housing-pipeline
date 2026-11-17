@@ -1,0 +1,18 @@
+version: 2
+models:
+  - name: fct_housing_deal
+    description: Eligible housing transactions of all declared uses; filter is_residential for residential indicators.
+    columns:
+      - name: source_row_key
+        data_tests: [not_null, unique]
+      - name: price_per_ping
+        data_tests: [not_null]
+      - name: transaction_date
+        data_tests: [not_null]
+  - name: agg_district_month_price
+    description: Exact median and count of residential deals per city, district and transaction month. Missing months are not zero-price observations.
+    columns:
+      - name: median_price_per_ping
+        data_tests: [not_null]
+      - name: deal_count
+        data_tests: [not_null]

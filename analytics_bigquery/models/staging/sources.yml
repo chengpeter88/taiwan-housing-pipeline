@@ -1,0 +1,8 @@
+version: 2
+sources:
+  - name: housing_raw
+    database: taiwan-household
+    schema: housing_raw
+    tables:
+      - name: lvr_sale
+        identifier: "{{ var('raw_snapshot') }}"

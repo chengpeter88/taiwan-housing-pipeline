@@ -1,0 +1,19 @@
+version: 2
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: lvr_sale
+models:
+  - name: stg_lvr_sale
+    columns:
+      - name: serial_no
+        tests: [not_null, unique]
+  - name: fct_housing_deal
+    columns:
+      - name: serial_no
+        tests: [not_null, unique]
+      - name: transaction_date
+        tests: [not_null]
+      - name: price_per_ping
+        tests: [not_null]

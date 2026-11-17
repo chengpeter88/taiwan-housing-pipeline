@@ -1,0 +1,5 @@
+select 1 as mismatch from (select 1)
+where (select count(*) from {{ ref('fct_housing_deal') }})
+    <> (select countif(is_price_eligible) from {{ ref('stg_lvr_sale') }})
+or (select countif(is_residential) from {{ ref('fct_housing_deal') }})
+    <> (select coalesce(sum(deal_count), 0) from {{ ref('agg_district_month_price') }})

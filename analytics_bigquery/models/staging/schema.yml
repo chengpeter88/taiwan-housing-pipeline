@@ -1,0 +1,14 @@
+version: 2
+models:
+  - name: stg_lvr_sale
+    description: One source row per snapshot, no filtering or cross-batch deduplication. Original strings remain alongside typed fields.
+    columns:
+      - name: source_row_key
+        data_tests: [not_null, unique]
+      - name: exclusion_reason
+        data_tests: [not_null]
+      - name: parking_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [no_parking, separately_reported, unclear_or_inconsistent, not_housing]

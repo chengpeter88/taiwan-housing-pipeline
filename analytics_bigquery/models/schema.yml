@@ -1,0 +1,9 @@
+version: 2
+models:
+  - name: environment_check
+    description: One-row environment verification; not real estate data.
+    columns:
+      - name: connection_ok
+        data_tests:
+          - not_null
+          - unique

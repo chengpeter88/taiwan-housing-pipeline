@@ -1,0 +1,12 @@
+name: taiwan_housing_bigquery
+version: '1.0.0'
+config-version: 2
+profile: taiwan_housing_bigquery
+model-paths: [models]
+vars:
+  raw_snapshot: lvr_sale_a_68315c006fa367834eaacf032ceccb22a114fc8798d87b8dac23cf5eb64030ab
+  min_transaction_date: '2025-06-01'
+  as_of_date: '2026-11-16'
+models:
+  taiwan_housing_bigquery:
+    +materialized: table

@@ -1,0 +1,5 @@
+**
+!requirements.lock
+!orchestration/
+!orchestration/Dockerfile
+!orchestration/requirements-runtime.txt
