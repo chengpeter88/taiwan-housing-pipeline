@@ -75,5 +75,6 @@ docker compose --env-file orchestration/.env -f orchestration/compose.yml down
 | 未發布季別 115S4 | fetch 第 1 次嘗試即失敗（官方回 HTML），未重試，下游未執行；同時證明容器可連到官方網站 |
 | 格式錯誤季別 abc | resolve_seasons 失敗，下游未執行 |
 | medallion 分層（11-18） | 全量執行成功，223 秒；dbt 寫入 housing_silver、housing_gold |
+| Gold 分析表（11-18） | 全量執行成功，343 秒；dbt build 78 項通過（7 個模型），遠低於 build_models 的 15 分鐘上限 |
 
 尚未做的部分：展示版本切換與回復機制（dbt 直接更新 housing_gold）、正式部署、通知，以及 Airflow 端的自動排程。
