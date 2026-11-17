@@ -1,7 +1,8 @@
 version: 2
 
 # Gold layer contract. Grain of every aggregate starts with city_code.
-# Low-sample threshold: var('low_sample_threshold'). Ratios are fractions (0.05 = 5%).
+# Low-sample threshold: var('low_sample_threshold'). Ratios are fractions (0.05 = 5%) rounded to 6 decimals;
+# percentile_cont returns FLOAT64 even for NUMERIC input, so unrounded ratios carry float noise.
 models:
   - name: fct_housing_deal
     description: >

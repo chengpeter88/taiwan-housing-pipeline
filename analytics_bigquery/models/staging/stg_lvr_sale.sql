@@ -1,11 +1,11 @@
 with typed as (
     select *,
         concat(source_sha256, ':', cast(source_row_number as string)) as source_row_key,
-        case when regexp_contains(trim(transaction_date_roc), r'^[0-9]{6,7}$') then
-            safe.parse_date('%Y%m%d', concat(
-                cast(safe_cast(substr(lpad(trim(transaction_date_roc), 7, '0'), 1, 3) as int64) + 1911 as string),
-                substr(lpad(trim(transaction_date_roc), 7, '0'), 4, 4)))
-        end as transaction_date,
+        {{ roc_to_date('transaction_date_roc') }} as transaction_date,
+        {{ roc_to_date('completion_date_roc') }} as completion_date,
+        safe_cast(trim(rooms) as int64) as room_count,
+        case trim(elevator) when '有' then true when '無' then false end as has_elevator,
+        case trim(management) when '有' then true when '無' then false end as has_management,
         safe_cast(total_price_ntd as numeric) as total_price,
         safe_cast(building_area_sqm as numeric) as building_area,
         safe_cast(parking_price_ntd as numeric) as parking_price,

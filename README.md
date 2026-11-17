@@ -22,9 +22,15 @@ BigQuery 採 medallion 三層，每層一個 dataset：
 | 層 | 物件 | 一列代表什麼 | 說明 |
 | --- | --- | --- | --- |
 | Bronze | `housing_bronze.lvr_season_a_<季>` | 官方 CSV 的一列 | Python 載入器寫入；33 個原始欄位皆為字串，加上季別、來源 sha256、列序、載入時間 |
-| Silver | `housing_silver.stg_lvr_sale` | 來源的一列 | dbt；型別轉換、旗標、唯一的 `exclusion_reason` |
-| Gold | `housing_gold.fct_housing_deal` | 一筆合格房地交易 | dbt；各用途皆保留，`is_residential` 標記住宅 |
-| Gold | `housing_gold.agg_district_month_price` | 城市 × 行政區 × 交易月 | dbt；住宅成交筆數與逐筆每坪單價的精確中位數 |
+| Silver | `housing_silver.stg_lvr_sale` | 來源的一列 | dbt；只做型別轉換（日期、金額、房數、電梯等）、旗標、唯一的 `exclusion_reason` |
+| Gold | `housing_gold.fct_housing_deal` | 一筆合格房地交易 | dbt；各用途皆保留，加上屋齡、屋齡帶、坪數帶、預算帶、建物分組 |
+| Gold | `agg_district_month_price` | 城市 × 行政區 × 月 | 各區每月住宅中位單價 |
+| Gold | `agg_district_quarter_price` | 城市 × 行政區 × 季 | 哪一區在漲：P25／中位數／P75、年增率 |
+| Gold | `agg_district_segment_price` | 城市 × 行政區 × 建物型態 × 屋齡帶 | 新大樓與老公寓差多少 |
+| Gold | `agg_district_budget` | 城市 × 行政區 × 總價帶（近 12 個月） | 某個預算能買到幾坪、屋齡多少 |
+| Gold | `agg_city_month_market` | 城市 × 月 | 市場冷熱：成交量、滾動 3 個月中位數 |
+
+Gold 的口徑、樣本門檻與目前的分析結果見 [docs/marts.md](docs/marts.md)。
 
 dbt 的 dataset 名稱由 [generate_schema_name](analytics_bigquery/macros/generate_schema_name.sql) 決定：target 為 `prod` 時寫入 `housing_silver`、`housing_gold`；其他 target（例如 CI）自動加前綴（`ci_housing_gold`），不會覆蓋正式資料。
 
@@ -76,8 +82,8 @@ Linux／macOS 改用 `.venv/bin/python`。
 2026-11-17 驗證結果：
 
 - pytest 68 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性。
-- `dbt build` 24 項通過（3 個模型）：2 組 unit tests 以假資料覆蓋全部 12 種排除原因與 6 位數日期；19 個資料測試涵蓋唯一鍵、允許值、季別完整性、列數對帳、價格公式與月粒度。
-- BigQuery 12 張季表的列數與官方 ZIP 逐季一致；pandas 從 fact 獨立重算 360 組月中位數，結果完全一致。
+- `dbt build` 78 項通過（7 個模型）：11 組 unit tests 以手算的小資料覆蓋 12 種排除原因、6 位數日期、屋齡週年邊界、分組邊界、精確分位數、年增率、滾動中位數與 NULL 處理；其餘資料測試涵蓋唯一鍵、允許值、季別完整性、各表與 fact 及月表的交叉對帳、價格公式與分位數順序。
+- BigQuery 12 張季表的列數與官方 ZIP 逐季一致；pandas 從 Silver 獨立重算 fact 衍生欄位與全部 Gold 彙總表，每一欄都完全一致。
 - Airflow 3.4.0 容器：12 季全量執行成功、同參數重跑筆數不變、未發布與格式錯誤的季別在對應任務失敗且不重試。
 
 `.github/workflows/ci.yml` 在 push 到 main 與每個 PR 時依序執行 `ruff check`、`black --check` 與 pytest，不下載官方檔，也不需要雲端金鑰。格式與 lint 設定在 `pyproject.toml`（行寬 100、保留單引號）。dbt 需要 BigQuery 連線，目前只在本機與 Airflow 執行。

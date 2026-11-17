@@ -17,7 +17,8 @@
 ## 規則
 
 - 一列對應來源一列，以 `source_sha256:source_row_number` 為唯一鍵，不刪除任何交易。
-- 民國日期支援 6 位數（民國 99 年前，例如 `980806`）與 7 位數，無效日期為 NULL。
+- 民國日期支援 6 位數（民國 99 年前，例如 `980806`）與 7 位數，無效日期為 NULL。交易日與建築完成日共用 macro `roc_to_date`。
+- 其他型別轉換：`completion_date`、`room_count`（整數，0 照原值保留）、`has_elevator`、`has_management`（有 → TRUE、無 → FALSE、其他 → NULL）。分組與屋齡等業務定義放在 Gold，見 [marts.md](marts.md)。
 - 同城市編號在納入的季別中出現多次時，標記 `duplicate_serial_review` 並暫停納入價格分析，不自行挑一筆。目前 12 季沒有重複。
 - `exclusion_reason` 依固定順序給每列一個主要原因，`is_price_eligible` 表示合格房地交易，`is_residential_price_eligible` 另外要求主要用途為住家用。
 
