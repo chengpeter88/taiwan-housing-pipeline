@@ -1,6 +1,6 @@
 # BigQuery staging
 
-模型：`taiwan-household.housing_dev.stg_lvr_sale`。來源為 wildcard 表 `housing_raw.lvr_season_a_*`，只納入 `var('seasons')` 列出的季別（預設值與 `config/seasons.json` 相同，pytest 會檢查兩者一致）。
+模型：`taiwan-household.housing_silver.stg_lvr_sale`（Silver 層）。來源為 Bronze 層的 wildcard 表 `housing_bronze.lvr_season_a_*`，只納入 `var('seasons')` 列出的季別（預設值與 `config/seasons.json` 相同，pytest 會檢查兩者一致）。
 
 ```powershell
 .venv\Scripts\dbt.exe build --project-dir analytics_bigquery --profiles-dir analytics_bigquery --select stg_lvr_sale

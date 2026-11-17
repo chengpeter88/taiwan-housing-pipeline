@@ -12,7 +12,7 @@ unit_tests:
         min_transaction_date: '2025-06-01'
         as_of_date: '2026-03-31'
     given:
-      - input: source('housing_raw', 'lvr_season_a')
+      - input: source('bronze', 'lvr_season_a')
         rows:
           - &base {season: '115S1', city_code: 'A', source_sha256: 'h1', transaction_date_roc: '1150115', transaction_target: '房地(土地+建物)', main_use: '住家用', notes: '', total_price_ntd: '10000000', building_area_sqm: '50', parking_price_ntd: '0', parking_area_sqm: '0', parking_type: '', district: '中山區',
              source_row_number: 1, serial_no: 'S01'}
@@ -63,7 +63,7 @@ unit_tests:
         min_transaction_date: '2025-06-01'
         as_of_date: '2026-03-31'
     given:
-      - input: source('housing_raw', 'lvr_season_a')
+      - input: source('bronze', 'lvr_season_a')
         rows:
           - {<<: *base, source_row_number: 1, serial_no: 'D1', transaction_date_roc: '1150115'}
           - {<<: *base, source_row_number: 2, serial_no: 'D2', transaction_date_roc: '980806'}

@@ -41,3 +41,43 @@ def test_compose_no_longer_requires_local_zip():
 def test_runtime_requirements_list_requests():
     runtime = (ROOT / 'orchestration/requirements-runtime.txt').read_text(encoding='utf-8').split()
     assert 'requests' in runtime
+
+
+# ---------- BigQuery medallion 分層 ----------
+
+
+def _yaml(path: str) -> dict:
+    return yaml.safe_load((ROOT / path).read_text(encoding='utf-8'))
+
+
+def test_dbt_layers_map_to_medallion_datasets():
+    models = _yaml('analytics_bigquery/dbt_project.yml')['models']['taiwan_housing_bigquery']
+    assert models['staging']['+schema'] == 'silver'
+    assert models['marts']['+schema'] == 'gold'
+
+
+def test_dbt_source_reads_bronze_dataset():
+    source = _yaml('analytics_bigquery/models/staging/sources.yml')['sources'][0]
+    assert source['name'] == 'bronze'
+    assert source['schema'] == 'housing_bronze'
+
+
+def test_generate_schema_name_prefixes_non_prod_targets():
+    # prod 寫入 housing_<層>；其他 target（例如 ci）加前綴，避免覆蓋正式資料
+    macro = (ROOT / 'analytics_bigquery/macros/generate_schema_name.sql').read_text(encoding='utf-8')
+    assert 'macro generate_schema_name' in macro
+    assert "'housing_'" in macro and "'prod'" in macro
+    profiles = _yaml('analytics_bigquery/profiles.yml')['taiwan_housing_bigquery']
+    assert profiles['target'] == 'prod'
+    assert 'prod' in profiles['outputs']
+
+
+def test_environment_check_test_model_removed():
+    assert not (ROOT / 'analytics_bigquery/models/environment_check.sql').exists()
+    assert not (ROOT / 'analytics_bigquery/models/schema.yml').exists()
+
+
+def test_dbt_project_and_profiles_are_ascii():
+    # dbt 在 Windows 以系統編碼（cp950）讀這兩個檔案計算雜湊，非 ASCII 字元會讓 dbt 崩潰
+    for path in ['analytics_bigquery/dbt_project.yml', 'analytics_bigquery/profiles.yml']:
+        assert (ROOT / path).read_bytes().isascii(), path

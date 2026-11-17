@@ -10,3 +10,8 @@ vars:
 models:
   taiwan_housing_bigquery:
     +materialized: table
+    # Medallion layers: bronze is written by the Python loader; dbt writes silver and gold.
+    staging:
+      +schema: silver
+    marts:
+      +schema: gold

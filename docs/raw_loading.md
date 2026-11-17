@@ -44,7 +44,7 @@ cd E:\coding\taiwan-housing-pipeline
 
 ## BigQuery 表
 
-- 每季一表：`taiwan-household.housing_raw.lvr_season_a_<季>`，區域 US。以 load job 的 WRITE_TRUNCATE 整表覆寫，重跑不累加。
+- 每季一表：`taiwan-household.housing_bronze.lvr_season_a_<季>`（medallion 的 Bronze 層），區域 US；dataset 不存在時載入器會自動建立。以 load job 的 WRITE_TRUNCATE 整表覆寫，重跑不累加。
 - 33 個來源欄位皆為 STRING，原始字串不清理。另加 `city_code`、`season`、`source_sha256`、`source_row_number`、`loaded_at`。
 - 載入後核對表的列數等於來源列數，結果寫入 `data/landing/<sha256>/load_result.json`，含表的到期時間。
 
@@ -53,5 +53,5 @@ cd E:\coding\taiwan-housing-pipeline
 ## 注意事項
 
 - 專案使用 BigQuery sandbox，表在建立後 60 天自動刪除。重建方式：手動觸發 Airflow DAG 一次，或用上方指令逐季重載，再執行 `dbt build`。
-- 舊的單季表 `lvr_sale_a_<sha256>` 已不再使用，會自動到期，沒有手動刪除。
+- 2026-11-18 由 `housing_raw` 遷移到 `housing_bronze`：從零重載後逐列比對與舊表完全相同，舊 dataset（含舊的單季表 `lvr_sale_a_<sha256>`）已刪除。
 - 載入器只處理台北買賣；新增縣市需調整 `city_code` 與檔名，屬於後續工作。

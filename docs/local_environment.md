@@ -76,8 +76,8 @@ dbt 專案在 `analytics_bigquery/`，連線設定是同目錄的 `profiles.yml`
 | --- | --- | --- |
 | method | `oauth` | 使用 ADC，檔案內無機密 |
 | project | `taiwan-household` | GCP 專案 |
-| dataset | `housing_dev` | staging 與 marts |
-| location | `US` | 與 `housing_raw` 相同；dataset 建立後不可更改 |
+| target | `prod` | 寫入 `housing_silver`、`housing_gold`；其他 target 自動加前綴，見 `macros/generate_schema_name.sql` |
+| location | `US` | 與 `housing_bronze` 相同；dataset 建立後不可更改 |
 
 ```powershell
 .venv\Scripts\dbt.exe debug --project-dir analytics_bigquery --profiles-dir analytics_bigquery

@@ -11,7 +11,7 @@ with typed as (
         safe_cast(parking_price_ntd as numeric) as parking_price,
         safe_cast(parking_area_sqm as numeric) as parking_area,
         count(*) over (partition by city_code, serial_no) as serial_occurrences
-    from {{ source('housing_raw', 'lvr_season_a') }}
+    from {{ source('bronze', 'lvr_season_a') }}
     where season in {{ season_list() }}
 ), flagged as (
     select *,

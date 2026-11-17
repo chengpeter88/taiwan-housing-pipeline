@@ -16,6 +16,7 @@ from zipfile import BadZipFile, ZipFile
 
 import pandas as pd
 import requests
+from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 from scripts.profile_dataset import read_sales
@@ -289,7 +290,7 @@ def bigquery_schema(columns: list[str]) -> list[bigquery.SchemaField]:
 
 def load(client: bigquery.Client, df: pd.DataFrame, metadata: dict, table_id: str,
          location: str) -> dict:
-    """以 WRITE_TRUNCATE 載入單一季別資料表並核對筆數。
+    """以 WRITE_TRUNCATE 載入單一季別資料表並核對筆數；dataset 不存在時於指定區域建立。
 
     Args:
         client: BigQuery client。
@@ -306,7 +307,14 @@ def load(client: bigquery.Client, df: pd.DataFrame, metadata: dict, table_id: st
         RuntimeError: 載入後筆數與來源不符。
     """
     dataset_id = table_id.rsplit('.', 1)[0]
-    dataset = client.get_dataset(dataset_id, timeout=20)
+    try:
+        dataset = client.get_dataset(dataset_id, timeout=20)
+    except NotFound:
+        # 從零重建時 bronze dataset 可能不存在；在指定區域建立，區域建立後不可更改
+        LOGGER.info('Dataset %s not found; creating it in %s', dataset_id, location)
+        new_dataset = bigquery.Dataset(dataset_id)
+        new_dataset.location = location
+        dataset = client.create_dataset(new_dataset, timeout=20)
     if dataset.location.upper() != location.upper():
         raise SourceValidationError(f'Dataset location is {dataset.location}, not {location}')
     config = bigquery.LoadJobConfig(schema=bigquery_schema(list(df.columns)),
@@ -347,7 +355,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--zip', type=Path, help='本機季檔 ZIP；未給則下載或使用快取')
     parser.add_argument('--landing', type=Path, default=ROOT / 'data/landing')
     parser.add_argument('--project', default='taiwan-household')
-    parser.add_argument('--dataset', default='housing_raw')
+    parser.add_argument('--dataset', default='housing_bronze')
     parser.add_argument('--location', default='US')
     parser.add_argument('--refresh', action='store_true')
     mode = parser.add_mutually_exclusive_group()

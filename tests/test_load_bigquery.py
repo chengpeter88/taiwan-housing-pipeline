@@ -85,12 +85,20 @@ class FakeSession:
 class FakeClient:
     """模擬 bigquery.Client，記錄載入參數。"""
 
-    def __init__(self, num_rows: int | None = None, location: str = 'US'):
-        self.num_rows, self.location = num_rows, location
-        self.loaded, self.deleted = [], []
+    def __init__(self, num_rows: int | None = None, location: str = 'US',
+                 dataset_exists: bool = True):
+        self.num_rows, self.location, self.dataset_exists = num_rows, location, dataset_exists
+        self.loaded, self.deleted, self.created = [], [], []
 
     def get_dataset(self, dataset_id, **kwargs):
+        if not self.dataset_exists:
+            raise lb.NotFound(f'Dataset {dataset_id} not found')
         return SimpleNamespace(location=self.location)
+
+    def create_dataset(self, dataset, **kwargs):
+        self.created.append(dataset)
+        self.dataset_exists = True
+        return dataset
 
     def load_table_from_dataframe(self, df, table_id, **kwargs):
         self.loaded.append((df, table_id, kwargs))
@@ -256,7 +264,7 @@ def test_prepare_rejects_missing_members(tmp_path):
 
 
 def test_table_id_uses_season_table_prefix():
-    assert lb.table_id_for('p', 'housing_raw', '115S3') == 'p.housing_raw.lvr_season_a_115S3'
+    assert lb.table_id_for('p', 'housing_bronze', '115S3') == 'p.housing_bronze.lvr_season_a_115S3'
 
 
 def test_bigquery_schema_types():
@@ -271,12 +279,12 @@ def test_load_truncates_season_table_and_verifies_rows(tmp_path):
     source.write_bytes(make_zip())
     df, metadata = lb.prepare(source, '115S3', tmp_path / 'landing')
     client = FakeClient()
-    result = lb.load(client, df, metadata, 'p.housing_raw.lvr_season_a_115S3', 'US')
+    result = lb.load(client, df, metadata, 'p.housing_bronze.lvr_season_a_115S3', 'US')
     _, table_id, kwargs = client.loaded[0]
-    assert table_id == 'p.housing_raw.lvr_season_a_115S3'
+    assert table_id == 'p.housing_bronze.lvr_season_a_115S3'
     assert kwargs['job_config'].write_disposition == 'WRITE_TRUNCATE'
     assert result['loaded_rows'] == 3 and result['status'] == 'row_count_verified'
-    assert result['table_id'] == 'p.housing_raw.lvr_season_a_115S3'
+    assert result['table_id'] == 'p.housing_bronze.lvr_season_a_115S3'
     assert 'table_expires' in result
 
 
@@ -285,7 +293,7 @@ def test_load_raises_on_row_count_mismatch(tmp_path):
     source.write_bytes(make_zip())
     df, metadata = lb.prepare(source, '115S3', tmp_path / 'landing')
     with pytest.raises(RuntimeError):
-        lb.load(FakeClient(num_rows=2), df, metadata, 'p.housing_raw.lvr_season_a_115S3', 'US')
+        lb.load(FakeClient(num_rows=2), df, metadata, 'p.housing_bronze.lvr_season_a_115S3', 'US')
 
 
 def test_load_rejects_dataset_in_other_location(tmp_path):
@@ -293,13 +301,27 @@ def test_load_rejects_dataset_in_other_location(tmp_path):
     source.write_bytes(make_zip())
     df, metadata = lb.prepare(source, '115S3', tmp_path / 'landing')
     with pytest.raises(lb.SourceValidationError):
-        lb.load(FakeClient(location='asia-east1'), df, metadata, 'p.housing_raw.lvr_season_a_115S3', 'US')
+        lb.load(FakeClient(location='asia-east1'), df, metadata, 'p.housing_bronze.lvr_season_a_115S3', 'US')
+
+
+def test_load_creates_missing_dataset_in_expected_location(tmp_path):
+    # 從零重建時 bronze dataset 可能不存在：自動在指定區域建立，而不是失敗
+    source = tmp_path / 'in.zip'
+    source.write_bytes(make_zip())
+    df, metadata = lb.prepare(source, '115S3', tmp_path / 'landing')
+    client = FakeClient(dataset_exists=False)
+    result = lb.load(client, df, metadata, 'p.housing_bronze.lvr_season_a_115S3', 'US')
+    assert len(client.created) == 1
+    assert client.created[0].dataset_id == 'housing_bronze'
+    assert client.created[0].project == 'p'
+    assert client.created[0].location == 'US'
+    assert result['status'] == 'row_count_verified'
 
 
 def test_drop_season_deletes_only_that_table():
     client = FakeClient()
-    lb.drop_season(client, 'p.housing_raw.lvr_season_a_115S3')
-    assert client.deleted == [('p.housing_raw.lvr_season_a_115S3', {'not_found_ok': True})]
+    lb.drop_season(client, 'p.housing_bronze.lvr_season_a_115S3')
+    assert client.deleted == [('p.housing_bronze.lvr_season_a_115S3', {'not_found_ok': True})]
 
 
 # ---------- CLI ----------
@@ -355,7 +377,8 @@ def test_main_drop_season(tmp_path, monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(lb.bigquery, 'Client', lambda **kw: client)
     assert lb.main(['--season', '115S3', '--drop', '--landing', str(tmp_path)]) == 0
-    assert client.deleted[0][0].endswith('housing_raw.lvr_season_a_115S3')
+    # 預設寫入 medallion 的 bronze 層
+    assert client.deleted[0][0] == 'taiwan-household.housing_bronze.lvr_season_a_115S3'
 
 
 def test_main_drop_and_validate_only_are_exclusive(tmp_path):

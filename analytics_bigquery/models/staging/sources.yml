@@ -1,8 +1,8 @@
 version: 2
 sources:
-  - name: housing_raw
+  - name: bronze
     database: taiwan-household
-    schema: housing_raw
+    schema: housing_bronze
     tables:
       - name: lvr_season_a
         identifier: "lvr_season_a_*"

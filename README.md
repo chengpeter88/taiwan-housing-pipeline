@@ -9,20 +9,24 @@
 ```mermaid
 flowchart LR
     A[官方季檔<br>DownloadSeason] --> B[載入器<br>下載・驗證・快取]
-    B --> C[housing_raw<br>lvr_season_a_季別 ×12]
-    C --> D[dbt staging<br>型別・排除原因]
-    D --> E[fct_housing_deal]
-    E --> F[agg_district_month_price]
+    B --> C[Bronze: housing_bronze<br>lvr_season_a_季別 ×12]
+    C --> D[Silver: housing_silver<br>stg_lvr_sale]
+    D --> E[Gold: housing_gold<br>fct_housing_deal]
+    E --> F[Gold: housing_gold<br>agg_district_month_price]
     G[Airflow DAG<br>手動觸發] -.-> B
     G -.-> D
 ```
 
-| 物件 | 一列代表什麼 | 說明 |
-| --- | --- | --- |
-| `housing_raw.lvr_season_a_<季>` | 官方 CSV 的一列 | 33 個原始欄位皆為字串，加上季別、來源 sha256、列序、載入時間 |
-| `stg_lvr_sale` | 來源的一列 | 型別轉換、旗標、唯一的 `exclusion_reason` |
-| `fct_housing_deal` | 一筆合格房地交易 | 各用途皆保留，`is_residential` 標記住宅 |
-| `agg_district_month_price` | 城市 × 行政區 × 交易月 | 住宅成交筆數與逐筆每坪單價的精確中位數 |
+BigQuery 採 medallion 三層，每層一個 dataset：
+
+| 層 | 物件 | 一列代表什麼 | 說明 |
+| --- | --- | --- | --- |
+| Bronze | `housing_bronze.lvr_season_a_<季>` | 官方 CSV 的一列 | Python 載入器寫入；33 個原始欄位皆為字串，加上季別、來源 sha256、列序、載入時間 |
+| Silver | `housing_silver.stg_lvr_sale` | 來源的一列 | dbt；型別轉換、旗標、唯一的 `exclusion_reason` |
+| Gold | `housing_gold.fct_housing_deal` | 一筆合格房地交易 | dbt；各用途皆保留，`is_residential` 標記住宅 |
+| Gold | `housing_gold.agg_district_month_price` | 城市 × 行政區 × 交易月 | dbt；住宅成交筆數與逐筆每坪單價的精確中位數 |
+
+dbt 的 dataset 名稱由 [generate_schema_name](analytics_bigquery/macros/generate_schema_name.sql) 決定：target 為 `prod` 時寫入 `housing_silver`、`housing_gold`；其他 target（例如 CI）自動加前綴（`ci_housing_gold`），不會覆蓋正式資料。
 
 ## 快速開始
 
@@ -69,8 +73,8 @@ Linux／macOS 改用 `.venv/bin/python`。
 
 2026-11-17 驗證結果：
 
-- pytest 61 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、CLI exit code、設定一致性。
-- `dbt build` 27 項通過：2 組 unit tests 以假資料覆蓋全部 12 種排除原因與 6 位數日期；21 個資料測試涵蓋唯一鍵、允許值、季別完整性、列數對帳、價格公式與月粒度。
+- pytest 67 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性。
+- `dbt build` 24 項通過（3 個模型）：2 組 unit tests 以假資料覆蓋全部 12 種排除原因與 6 位數日期；19 個資料測試涵蓋唯一鍵、允許值、季別完整性、列數對帳、價格公式與月粒度。
 - BigQuery 12 張季表的列數與官方 ZIP 逐季一致；pandas 從 fact 獨立重算 360 組月中位數，結果完全一致。
 - Airflow 3.4.0 容器：12 季全量執行成功、同參數重跑筆數不變、未發布與格式錯誤的季別在對應任務失敗且不重試。
 
@@ -79,7 +83,7 @@ Linux／macOS 改用 `.venv/bin/python`。
 ## 限制與下一步
 
 - BigQuery sandbox 的表在 60 天後自動刪除，重建方式見 [raw_loading.md](docs/raw_loading.md)。
-- dbt 直接更新 `housing_dev`，尚未有展示版本切換與回復機制。
+- dbt 直接更新 `housing_gold`，尚未有展示版本切換與回復機制。
 - Airflow 只接受手動觸發；尚未做遠端部署、通知或來源撤回案件同步。
 - 目前只有台北買賣主表，子表未 join，避免一對多造成總價重複。
 

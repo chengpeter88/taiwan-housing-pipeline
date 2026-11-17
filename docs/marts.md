@@ -1,6 +1,6 @@
 # 交易明細與住宅月彙總
 
-2026-11-17 以 12 季資料重建並驗證。所有模型位於 housing_dev，尚未建立正式展示發布閘門。
+2026-11-17 以 12 季資料重建並驗證。兩個模型位於 Gold 層 `housing_gold`，尚未建立正式展示發布閘門。
 
 - fct_housing_deal：30,756 筆合格房地交易，包含各用途；`is_residential` 為真的住宅交易 23,716 筆。
 - agg_district_month_price：住宅交易按城市、行政區與交易月份分組，2023-10 到 2026-03 共 30 個月 × 12 區 = 360 列，每列含成交筆數與逐筆單價的精確中位數。
@@ -10,7 +10,7 @@
 
 沒有成交的行政區月份不補零，沒有額外剔除離群價格。小樣本及屋齡、型態組成差異會影響中位數，因此不能解讀成房價指數。跨月篩選時必須回到 fact 的逐筆住宅交易重算，不可平均或再取月中位數的中位數。
 
-驗證：`dbt build` 27 項全部通過（4 個模型、21 個資料測試、2 組 unit tests）。另以 pandas 從 fact 獨立重算全部 360 組，筆數與中位數完全一致。
+驗證：`dbt build` 24 項全部通過（3 個模型、19 個資料測試、2 組 unit tests）。2026-11-18 遷移到 medallion 分層後，與舊表逐列比對完全相同。另以 pandas 從 fact 獨立重算全部 360 組，筆數與中位數完全一致。
 
 ```powershell
 .venv\Scripts\dbt.exe build --project-dir analytics_bigquery --profiles-dir analytics_bigquery
