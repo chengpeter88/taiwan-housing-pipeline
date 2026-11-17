@@ -10,6 +10,14 @@ def test_roc_dates_do_not_normalize_invalid_days():
     assert dates.iloc[3] == pd.Timestamp('2025-07-15')
 
 
+def test_roc_dates_accept_six_digit_years_before_100():
+    # 民國 99 年以前的日期是 6 位數，例如 980806
+    dates = roc_dates(pd.Series(['980806', '0980806', '12345', '1150230'], dtype='string'))
+    assert dates.iloc[0] == pd.Timestamp('2009-08-06')
+    assert dates.iloc[1] == pd.Timestamp('2009-08-06')
+    assert dates.iloc[2:4].isna().all()
+
+
 def test_parking_zero_is_not_automatically_no_parking():
     df = pd.DataFrame({
         '交易標的': [HOUSING, WITH_PARKING, WITH_PARKING, WITH_PARKING, WITH_PARKING, HOUSING],

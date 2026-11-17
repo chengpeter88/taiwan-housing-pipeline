@@ -6,6 +6,14 @@ models:
       - name: source_row_key
         data_tests: [not_null, unique]
       - name: exclusion_reason
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [eligible, missing_serial, duplicate_serial_review, non_housing,
+                         special_relationship, presale_or_separate, invalid_date, future_date,
+                         outside_window, invalid_price_or_area, unclear_parking, missing_district]
+      - name: season
         data_tests: [not_null]
       - name: parking_status
         data_tests:

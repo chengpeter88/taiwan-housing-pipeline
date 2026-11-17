@@ -1,0 +1,83 @@
+version: 2
+
+# stg_lvr_sale 的分類邏輯單元測試。
+# 真實資料中有些排除分支筆數為 0，因此用假資料逐一驗證每個 exclusion_reason。
+# 第一列以 YAML anchor（&base）定義合格住宅交易，其餘列只覆寫被測欄位。
+unit_tests:
+  - name: stg_lvr_sale_classifies_each_exclusion_reason
+    model: stg_lvr_sale
+    overrides:
+      vars:
+        seasons: ['115S1', '115S2']
+        min_transaction_date: '2025-06-01'
+        as_of_date: '2026-03-31'
+    given:
+      - input: source('housing_raw', 'lvr_season_a')
+        rows:
+          - &base {season: '115S1', city_code: 'A', source_sha256: 'h1', transaction_date_roc: '1150115', transaction_target: '房地(土地+建物)', main_use: '住家用', notes: '', total_price_ntd: '10000000', building_area_sqm: '50', parking_price_ntd: '0', parking_area_sqm: '0', parking_type: '', district: '中山區',
+             source_row_number: 1, serial_no: 'S01'}
+          - {<<: *base, source_row_number: 2, serial_no: ''}
+          # 同一編號跨季出現：兩列都暫停納入，不自行挑一筆
+          - {<<: *base, source_row_number: 3, serial_no: 'DUP'}
+          - {<<: *base, season: '115S2', source_sha256: 'h2', source_row_number: 1, serial_no: 'DUP'}
+          - {<<: *base, source_row_number: 5, serial_no: 'S05', transaction_target: '土地'}
+          - {<<: *base, source_row_number: 6, serial_no: 'S06', notes: '親友、員工、共有人或其他特殊關係間之交易'}
+          - {<<: *base, source_row_number: 7, serial_no: 'S07', notes: '預售屋、或土地及建物分件登記案件'}
+          - {<<: *base, source_row_number: 8, serial_no: 'S08', transaction_date_roc: '1150230'}
+          - {<<: *base, source_row_number: 9, serial_no: 'S09', transaction_date_roc: '1150415'}
+          - {<<: *base, source_row_number: 10, serial_no: 'S10', transaction_date_roc: '1140101'}
+          # 民國 99 年前的 6 位數日期是窗口外，不是無效日期
+          - {<<: *base, source_row_number: 11, serial_no: 'S11', transaction_date_roc: '980806'}
+          # 車位面積大於建物面積，扣除後面積為負
+          - {<<: *base, source_row_number: 12, serial_no: 'S12', transaction_target: '房地(土地+建物)+車位',
+             parking_price_ntd: '1000000', parking_area_sqm: '60', parking_type: '坡道平面'}
+          - {<<: *base, source_row_number: 13, serial_no: 'S13', transaction_target: '房地(土地+建物)+車位',
+             parking_price_ntd: '0', parking_area_sqm: '10', parking_type: '坡道平面'}
+          - {<<: *base, source_row_number: 14, serial_no: 'S14', district: ' '}
+          - {<<: *base, source_row_number: 15, serial_no: 'S15', main_use: '商業用'}
+          # 不在 var('seasons') 清單內的季別不進 staging
+          - {<<: *base, season: '114S4', source_sha256: 'h0', source_row_number: 1, serial_no: 'S16'}
+    expect:
+      rows:
+        - {source_row_key: 'h1:1', exclusion_reason: eligible, is_residential_price_eligible: true}
+        - {source_row_key: 'h1:2', exclusion_reason: missing_serial, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:3', exclusion_reason: duplicate_serial_review, is_residential_price_eligible: false}
+        - {source_row_key: 'h2:1', exclusion_reason: duplicate_serial_review, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:5', exclusion_reason: non_housing, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:6', exclusion_reason: special_relationship, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:7', exclusion_reason: presale_or_separate, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:8', exclusion_reason: invalid_date, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:9', exclusion_reason: future_date, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:10', exclusion_reason: outside_window, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:11', exclusion_reason: outside_window, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:12', exclusion_reason: invalid_price_or_area, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:13', exclusion_reason: unclear_parking, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:14', exclusion_reason: missing_district, is_residential_price_eligible: false}
+        - {source_row_key: 'h1:15', exclusion_reason: eligible, is_residential_price_eligible: false}
+
+  - name: stg_lvr_sale_parses_six_and_seven_digit_roc_dates
+    model: stg_lvr_sale
+    overrides:
+      vars:
+        seasons: ['115S1']
+        min_transaction_date: '2025-06-01'
+        as_of_date: '2026-03-31'
+    given:
+      - input: source('housing_raw', 'lvr_season_a')
+        rows:
+          - {<<: *base, source_row_number: 1, serial_no: 'D1', transaction_date_roc: '1150115'}
+          - {<<: *base, source_row_number: 2, serial_no: 'D2', transaction_date_roc: '980806'}
+          - {<<: *base, source_row_number: 3, serial_no: 'D3', transaction_date_roc: '0980806'}
+          - {<<: *base, source_row_number: 4, serial_no: 'D4', transaction_date_roc: ' 980806 '}
+          - {<<: *base, source_row_number: 5, serial_no: 'D5', transaction_date_roc: '12345'}
+          - {<<: *base, source_row_number: 6, serial_no: 'D6', transaction_date_roc: '1150230'}
+          - {<<: *base, source_row_number: 7, serial_no: 'D7', transaction_date_roc: ''}
+    expect:
+      rows:
+        - {source_row_key: 'h1:1', transaction_date: '2026-01-15'}
+        - {source_row_key: 'h1:2', transaction_date: '2009-08-06'}
+        - {source_row_key: 'h1:3', transaction_date: '2009-08-06'}
+        - {source_row_key: 'h1:4', transaction_date: '2009-08-06'}
+        - {source_row_key: 'h1:5', transaction_date: null}
+        - {source_row_key: 'h1:6', transaction_date: null}
+        - {source_row_key: 'h1:7', transaction_date: null}
