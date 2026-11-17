@@ -10,7 +10,9 @@ CONFIG = json.loads((ROOT / 'config/seasons.json').read_text(encoding='utf-8'))
 
 
 def test_dbt_vars_match_seasons_config():
-    project = yaml.safe_load((ROOT / 'analytics_bigquery/dbt_project.yml').read_text(encoding='utf-8'))
+    project = yaml.safe_load(
+        (ROOT / 'analytics_bigquery/dbt_project.yml').read_text(encoding='utf-8')
+    )
     variables = project['vars']
     assert variables['seasons'] == CONFIG['seasons']
     assert variables['min_transaction_date'] == CONFIG['min_transaction_date']
@@ -35,7 +37,9 @@ def test_compose_no_longer_requires_local_zip():
     compose = (ROOT / 'orchestration/compose.yml').read_text(encoding='utf-8')
     assert 'HOUSING_ZIP_PATH' not in compose
     assert 'AIRFLOW_PORT' in compose  # 埠號可由 .env 設定，避開既有服務
-    assert 'HOUSING_ZIP_PATH' not in (ROOT / 'orchestration/.env.example').read_text(encoding='utf-8')
+    assert 'HOUSING_ZIP_PATH' not in (ROOT / 'orchestration/.env.example').read_text(
+        encoding='utf-8'
+    )
 
 
 def test_runtime_requirements_list_requests():
@@ -64,7 +68,9 @@ def test_dbt_source_reads_bronze_dataset():
 
 def test_generate_schema_name_prefixes_non_prod_targets():
     # prod 寫入 housing_<層>；其他 target（例如 ci）加前綴，避免覆蓋正式資料
-    macro = (ROOT / 'analytics_bigquery/macros/generate_schema_name.sql').read_text(encoding='utf-8')
+    macro = (ROOT / 'analytics_bigquery/macros/generate_schema_name.sql').read_text(
+        encoding='utf-8'
+    )
     assert 'macro generate_schema_name' in macro
     assert "'housing_'" in macro and "'prod'" in macro
     profiles = _yaml('analytics_bigquery/profiles.yml')['taiwan_housing_bigquery']

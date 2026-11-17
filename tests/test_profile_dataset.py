@@ -19,13 +19,20 @@ def test_roc_dates_accept_six_digit_years_before_100():
 
 
 def test_parking_zero_is_not_automatically_no_parking():
-    df = pd.DataFrame({
-        '交易標的': [HOUSING, WITH_PARKING, WITH_PARKING, WITH_PARKING, WITH_PARKING, HOUSING],
-        '車位總價元': ['0', '0', '100', '0', '100', '0'],
-        '車位移轉總面積平方公尺': ['0', '0', '0', '10', '10', '0'],
-        '車位類別': ['', '坡道平面', '坡道平面', '坡道平面', '坡道平面', '坡道平面'],
-    }, dtype='string')
+    df = pd.DataFrame(
+        {
+            '交易標的': [HOUSING, WITH_PARKING, WITH_PARKING, WITH_PARKING, WITH_PARKING, HOUSING],
+            '車位總價元': ['0', '0', '100', '0', '100', '0'],
+            '車位移轉總面積平方公尺': ['0', '0', '0', '10', '10', '0'],
+            '車位類別': ['', '坡道平面', '坡道平面', '坡道平面', '坡道平面', '坡道平面'],
+        },
+        dtype='string',
+    )
     assert parking_status(df).tolist() == [
-        'no_parking', 'unclear_or_inconsistent', 'unclear_or_inconsistent',
-        'unclear_or_inconsistent', 'separately_reported', 'unclear_or_inconsistent',
+        'no_parking',
+        'unclear_or_inconsistent',
+        'unclear_or_inconsistent',
+        'unclear_or_inconsistent',
+        'separately_reported',
+        'unclear_or_inconsistent',
     ]

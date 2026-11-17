@@ -2,6 +2,7 @@
 
 Run: python scripts/profile_dataset.py source.zip --as-of 2026-11-15
 """
+
 import argparse
 import hashlib
 import io
@@ -13,8 +14,13 @@ import pandas as pd
 
 HOUSING = '房地(土地+建物)'
 WITH_PARKING = HOUSING + '+車位'
-NUMERIC = ['總價元', '建物移轉總面積平方公尺', '車位總價元',
-           '車位移轉總面積平方公尺', '單價元平方公尺']
+NUMERIC = [
+    '總價元',
+    '建物移轉總面積平方公尺',
+    '車位總價元',
+    '車位移轉總面積平方公尺',
+    '單價元平方公尺',
+]
 REQUIRED = ['編號', '交易標的', '交易年月日', '備註', '主要用途', '車位類別'] + NUMERIC
 
 
@@ -54,8 +60,9 @@ def parking_status(df):
     status = pd.Series('not_housing', index=df.index, dtype='string')
     housing = df['交易標的'].isin([HOUSING, WITH_PARKING])
     status.loc[housing] = 'unclear_or_inconsistent'
-    status.loc[df['交易標的'].eq(HOUSING) & price.eq(0) & area.eq(0)
-               & df['車位類別'].str.strip().eq('')] = 'no_parking'
+    status.loc[
+        df['交易標的'].eq(HOUSING) & price.eq(0) & area.eq(0) & df['車位類別'].str.strip().eq('')
+    ] = 'no_parking'
     status.loc[df['交易標的'].eq(WITH_PARKING) & price.gt(0) & area.gt(0)] = 'separately_reported'
     return status
 
@@ -68,32 +75,55 @@ def profile(df, min_date, as_of):
     presale = df['備註'].str.contains('預售屋、或土地及建物分件登記', regex=False)
     price = numbers['總價元'] - numbers['車位總價元']
     area = numbers['建物移轉總面積平方公尺'] - numbers['車位移轉總面積平方公尺']
-    baseline = (housing & ~special & ~presale & dates.between(min_date, as_of)
-                & price.gt(0) & area.gt(0)
-                & numbers['車位總價元'].ge(0) & numbers['車位移轉總面積平方公尺'].ge(0))
+    baseline = (
+        housing
+        & ~special
+        & ~presale
+        & dates.between(min_date, as_of)
+        & price.gt(0)
+        & area.gt(0)
+        & numbers['車位總價元'].ge(0)
+        & numbers['車位移轉總面積平方公尺'].ge(0)
+    )
     status = parking_status(df)
     strict = baseline & status.isin(['no_parking', 'separately_reported'])
     unit_price = price.div(area.where(area.gt(0))) * 3.30579
     pairs = df[['交易標的']].assign(
         parking_price_positive=numbers['車位總價元'].gt(0),
-        parking_area_positive=numbers['車位移轉總面積平方公尺'].gt(0))
-    counts = lambda s: {str(k): int(v) for k, v in s.value_counts(dropna=False).items()}
-    median = lambda mask: float(unit_price[mask].median()) if mask.any() else None
+        parking_area_positive=numbers['車位移轉總面積平方公尺'].gt(0),
+    )
+
+    def counts(series: pd.Series) -> dict[str, int]:
+        return {str(k): int(v) for k, v in series.value_counts(dropna=False).items()}
+
+    def median(mask: pd.Series) -> float | None:
+        return float(unit_price[mask].median()) if mask.any() else None
+
     return {
         'scope': 'Taipei sale main file only; no cross-batch revision inference',
-        'min_date': str(min_date.date()), 'as_of': str(as_of.date()),
-        'rows': len(df), 'columns': list(df.columns),
+        'min_date': str(min_date.date()),
+        'as_of': str(as_of.date()),
+        'rows': len(df),
+        'columns': list(df.columns),
         'missing_serial': int(df['編號'].str.strip().eq('').sum()),
         'duplicate_serial_extra_rows': int(df['編號'].duplicated().sum()),
         'exact_duplicate_extra_rows': int(df.duplicated().sum()),
-        'blank_counts': {k: int(v) for k, v in df.apply(lambda s: s.str.strip().eq('')).sum().items()},
-        'invalid_numeric_nonblank_counts': {c: int((df[c].str.strip().ne('') & numbers[c].isna()).sum()) for c in NUMERIC},
+        'blank_counts': {
+            k: int(v) for k, v in df.apply(lambda s: s.str.strip().eq('')).sum().items()
+        },
+        'invalid_numeric_nonblank_counts': {
+            c: int((df[c].str.strip().ne('') & numbers[c].isna()).sum()) for c in NUMERIC
+        },
         'invalid_date_rows': int(dates.isna().sum()),
         'future_date_rows': int(dates.gt(as_of).sum()),
         'date_min': None if dates.isna().all() else str(dates.min().date()),
         'date_max': None if dates.isna().all() else str(dates.max().date()),
         'targets': counts(df['交易標的']),
-        'housing_parking_groups': pairs[housing].groupby(list(pairs.columns)).size().reset_index(name='rows').to_dict('records'),
+        'housing_parking_groups': pairs[housing]
+        .groupby(list(pairs.columns))
+        .size()
+        .reset_index(name='rows')
+        .to_dict('records'),
         'baseline_rows': int(baseline.sum()),
         'baseline_parking_status': counts(status[baseline]),
         'strict_parking_rows': int(strict.sum()),
@@ -123,11 +153,16 @@ def main():
             raise ValueError(f'Corrupt ZIP member: {bad}')
         df, encoding = read_sales(archive.read('a_lvr_land_a.csv'))
         result = profile(df, min_date, as_of)
-        result.update(sha256=hashlib.sha256(payload).hexdigest(), encoding=encoding,
-                      archive_files=len(archive.namelist()),
-                      source_period_xml=archive.read('build_time.xml').decode('utf-8-sig'))
+        result.update(
+            sha256=hashlib.sha256(payload).hexdigest(),
+            encoding=encoding,
+            archive_files=len(archive.namelist()),
+            source_period_xml=archive.read('build_time.xml').decode('utf-8-sig'),
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False), encoding='utf-8')
+    args.output.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False), encoding='utf-8'
+    )
     print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
 
 

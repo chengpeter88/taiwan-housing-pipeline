@@ -1,0 +1,22 @@
+# 只放工具設定；依賴仍由 requirements.txt + requirements.lock（uv）管理。
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+# 專案沿用單引號字串，不讓 black 改成雙引號
+skip-string-normalization = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["data", "analytics_bigquery/target", "analytics_bigquery/logs"]
+
+[tool.ruff.lint]
+# 錯誤、未使用名稱、警告、import 排序、常見 bug、舊語法升級
+select = ["E", "F", "W", "I", "B", "UP"]
+# 行寬交給 black 處理
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"

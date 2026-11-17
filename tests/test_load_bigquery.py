@@ -31,19 +31,34 @@ def make_sales_csv(rows: int = 3, columns: list[str] | None = None) -> bytes:
     lines = [','.join(columns), ','.join(english[c] for c in columns)]
     for i in range(rows):
         values = {c: '' for c in columns}
-        values.update({'編號': f'RP{i:04d}', '交易標的': '房地(土地+建物)', '交易年月日': '1150601',
-                       '總價元': '10000000', '建物移轉總面積平方公尺': '50', '車位總價元': '0',
-                       '車位移轉總面積平方公尺': '0', '單價元平方公尺': '200000'})
+        values.update(
+            {
+                '編號': f'RP{i:04d}',
+                '交易標的': '房地(土地+建物)',
+                '交易年月日': '1150601',
+                '總價元': '10000000',
+                '建物移轉總面積平方公尺': '50',
+                '車位總價元': '0',
+                '車位移轉總面積平方公尺': '0',
+                '單價元平方公尺': '200000',
+            }
+        )
         lines.append(','.join(values[c] for c in columns))
     return ('\n'.join(lines) + '\n').encode('utf-8-sig')
 
 
-def make_zip(season: str = '115S3', csv: bytes | None = None, build_time: bytes | None = None,
-             members: tuple[str, ...] = ('manifest.csv', 'build_time.xml', 'a_lvr_land_a.csv')) -> bytes:
+def make_zip(
+    season: str = '115S3',
+    csv: bytes | None = None,
+    build_time: bytes | None = None,
+    members: tuple[str, ...] = ('manifest.csv', 'build_time.xml', 'a_lvr_land_a.csv'),
+) -> bytes:
     """產生最小的官方季檔 ZIP。"""
     content = {
         'manifest.csv': b'name\n',
-        'build_time.xml': build_time if build_time is not None else (FIXTURES / f'{season}.xml').read_bytes(),
+        'build_time.xml': (
+            build_time if build_time is not None else (FIXTURES / f'{season}.xml').read_bytes()
+        ),
         'a_lvr_land_a.csv': csv if csv is not None else make_sales_csv(),
     }
     buffer = io.BytesIO()
@@ -54,7 +69,9 @@ def make_zip(season: str = '115S3', csv: bytes | None = None, build_time: bytes 
 
 
 class FakeResponse:
-    def __init__(self, body: bytes, status: int = 200, content_type: str = 'application/octet-stream'):
+    def __init__(
+        self, body: bytes, status: int = 200, content_type: str = 'application/octet-stream'
+    ):
         self.body, self.status_code = body, status
         self.headers = {'Content-Type': content_type}
 
@@ -70,7 +87,7 @@ class FakeResponse:
 
     def iter_content(self, chunk_size: int = 1):
         for start in range(0, len(self.body), max(chunk_size, 1)):
-            yield self.body[start:start + chunk_size]
+            yield self.body[start : start + chunk_size]
 
 
 class FakeSession:
@@ -85,8 +102,9 @@ class FakeSession:
 class FakeClient:
     """模擬 bigquery.Client，記錄載入參數。"""
 
-    def __init__(self, num_rows: int | None = None, location: str = 'US',
-                 dataset_exists: bool = True):
+    def __init__(
+        self, num_rows: int | None = None, location: str = 'US', dataset_exists: bool = True
+    ):
         self.num_rows, self.location, self.dataset_exists = num_rows, location, dataset_exists
         self.loaded, self.deleted, self.created = [], [], []
 
@@ -115,7 +133,9 @@ class FakeClient:
 # ---------- 季別解析 ----------
 
 
-@pytest.mark.parametrize('season, expected', [('115S3', (115, 3)), ('112S4', (112, 4)), ('099S1', (99, 1))])
+@pytest.mark.parametrize(
+    'season, expected', [('115S3', (115, 3)), ('112S4', (112, 4)), ('099S1', (99, 1))]
+)
 def test_parse_season_accepts_roc_year_and_quarter(season, expected):
     assert lb.parse_season(season) == expected
 
@@ -128,15 +148,19 @@ def test_parse_season_rejects_bad_format(season):
 
 def test_season_url_uses_official_download_endpoint():
     assert lb.season_url('115S3') == (
-        'https://plvr.land.moi.gov.tw/DownloadSeason?season=115S3&type=zip&fileName=lvr_landcsv.zip')
+        'https://plvr.land.moi.gov.tw/DownloadSeason?season=115S3&type=zip&fileName=lvr_landcsv.zip'
+    )
 
 
-@pytest.mark.parametrize('season, start, end', [
-    ('115S1', date(2025, 12, 11), date(2026, 3, 10)),
-    ('115S2', date(2026, 3, 11), date(2026, 6, 10)),
-    ('115S3', date(2026, 6, 11), date(2026, 9, 10)),
-    ('112S4', date(2023, 9, 11), date(2023, 12, 10)),
-])
+@pytest.mark.parametrize(
+    'season, start, end',
+    [
+        ('115S1', date(2025, 12, 11), date(2026, 3, 10)),
+        ('115S2', date(2026, 3, 11), date(2026, 6, 10)),
+        ('115S3', date(2026, 6, 11), date(2026, 9, 10)),
+        ('112S4', date(2023, 9, 11), date(2023, 12, 10)),
+    ],
+)
 def test_registration_period_by_season(season, start, end):
     assert lb.registration_period(season) == (start, end)
 
@@ -235,7 +259,9 @@ def test_prepare_adds_season_lineage_columns(tmp_path):
     assert metadata['registration_start'] == '2026-06-11'
     assert metadata['registration_end'] == '2026-09-10'
     # 驗證階段就把來源固定在 landing，供載入任務使用
-    assert (tmp_path / 'landing' / metadata['sha256'] / 'source.zip').read_bytes() == source.read_bytes()
+    assert (
+        tmp_path / 'landing' / metadata['sha256'] / 'source.zip'
+    ).read_bytes() == source.read_bytes()
     assert (tmp_path / 'landing' / metadata['sha256'] / 'metadata.json').exists()
 
 
@@ -268,10 +294,16 @@ def test_table_id_uses_season_table_prefix():
 
 
 def test_bigquery_schema_types():
-    fields = {f.name: f.field_type for f in lb.bigquery_schema(
-        ['district', 'season', 'source_row_number', 'loaded_at'])}
-    assert fields == {'district': 'STRING', 'season': 'STRING',
-                      'source_row_number': 'INTEGER', 'loaded_at': 'TIMESTAMP'}
+    fields = {
+        f.name: f.field_type
+        for f in lb.bigquery_schema(['district', 'season', 'source_row_number', 'loaded_at'])
+    }
+    assert fields == {
+        'district': 'STRING',
+        'season': 'STRING',
+        'source_row_number': 'INTEGER',
+        'loaded_at': 'TIMESTAMP',
+    }
 
 
 def test_load_truncates_season_table_and_verifies_rows(tmp_path):
@@ -301,7 +333,13 @@ def test_load_rejects_dataset_in_other_location(tmp_path):
     source.write_bytes(make_zip())
     df, metadata = lb.prepare(source, '115S3', tmp_path / 'landing')
     with pytest.raises(lb.SourceValidationError):
-        lb.load(FakeClient(location='asia-east1'), df, metadata, 'p.housing_bronze.lvr_season_a_115S3', 'US')
+        lb.load(
+            FakeClient(location='asia-east1'),
+            df,
+            metadata,
+            'p.housing_bronze.lvr_season_a_115S3',
+            'US',
+        )
 
 
 def test_load_creates_missing_dataset_in_expected_location(tmp_path):
@@ -336,8 +374,17 @@ def test_main_validate_only_with_local_zip(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(lb.bigquery, 'Client', lambda **kw: pytest.fail('should not connect'))
     source = tmp_path / 'in.zip'
     source.write_bytes(make_zip())
-    code = lb.main(['--season', '115S3', '--zip', str(source), '--validate-only',
-                    '--landing', str(tmp_path / 'landing')])
+    code = lb.main(
+        [
+            '--season',
+            '115S3',
+            '--zip',
+            str(source),
+            '--validate-only',
+            '--landing',
+            str(tmp_path / 'landing'),
+        ]
+    )
     assert code == 0
     printed = json.loads(capsys.readouterr().out)
     assert printed['season'] == '115S3' and printed['source_rows'] == 3
@@ -347,8 +394,20 @@ def test_main_stdout_json_is_ascii_safe(tmp_path, capsys):
     # Windows 主控台預設 cp950，非 ASCII 字元會被轉成亂碼；給程式解析的 stdout 必須是純 ASCII
     source = tmp_path / 'in.zip'
     source.write_bytes(make_zip())
-    assert lb.main(['--season', '115S3', '--zip', str(source), '--validate-only',
-                    '--landing', str(tmp_path / 'landing')]) == 0
+    assert (
+        lb.main(
+            [
+                '--season',
+                '115S3',
+                '--zip',
+                str(source),
+                '--validate-only',
+                '--landing',
+                str(tmp_path / 'landing'),
+            ]
+        )
+        == 0
+    )
     out = capsys.readouterr().out
     assert out.isascii()
     assert '登記日期' in json.loads(out)['source_period_xml']
@@ -357,8 +416,20 @@ def test_main_stdout_json_is_ascii_safe(tmp_path, capsys):
 def test_main_period_mismatch_exits_3(tmp_path):
     source = tmp_path / 'in.zip'
     source.write_bytes(make_zip(build_time=(FIXTURES / '115S2.xml').read_bytes()))
-    assert lb.main(['--season', '115S3', '--zip', str(source), '--validate-only',
-                    '--landing', str(tmp_path / 'landing')]) == 3
+    assert (
+        lb.main(
+            [
+                '--season',
+                '115S3',
+                '--zip',
+                str(source),
+                '--validate-only',
+                '--landing',
+                str(tmp_path / 'landing'),
+            ]
+        )
+        == 3
+    )
 
 
 def test_main_load_writes_result_per_snapshot(tmp_path, monkeypatch):
@@ -370,7 +441,9 @@ def test_main_load_writes_result_per_snapshot(tmp_path, monkeypatch):
     assert lb.main(['--season', '115S3', '--zip', str(source), '--landing', str(landing)]) == 0
     results = list(landing.glob('*/load_result.json'))
     assert len(results) == 1
-    assert json.loads(results[0].read_text(encoding='utf-8'))['table_id'].endswith('lvr_season_a_115S3')
+    assert json.loads(results[0].read_text(encoding='utf-8'))['table_id'].endswith(
+        'lvr_season_a_115S3'
+    )
 
 
 def test_main_drop_season(tmp_path, monkeypatch):

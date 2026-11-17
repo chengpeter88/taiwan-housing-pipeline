@@ -17,6 +17,8 @@ attrs==26.1.0
     #   referencing
 babel==2.18.0
     # via agate
+black==26.10.1
+    # via -r requirements.txt
 certifi==2026.10.23
     # via
     #   google-cloud-aiplatform
@@ -28,7 +30,9 @@ cffi==2.1.1 ; platform_python_implementation != 'PyPy'
 charset-normalizer==3.5.2
     # via requests
 click==8.5.1
-    # via dbt-core
+    # via
+    #   black
+    #   dbt-core
 colorama==0.4.6
     # via
     #   dbt-common
@@ -200,6 +204,8 @@ more-itertools==10.8.0
     # via metricflow
 msgpack==1.2.4
     # via mashumaro
+mypy-extensions==1.2.0
+    # via black
 nbformat==5.11.1
     # via dbt-bigquery
 networkx==3.4.2
@@ -220,6 +226,7 @@ orderly-set==5.5.0
     # via deepdiff
 packaging==26.3
     # via
+    #   black
     #   db-dtypes
     #   dbt-core
     #   google-cloud-aiplatform
@@ -238,10 +245,13 @@ parsedatetime==2.6
     # via agate
 pathspec==1.0.4
     # via
+    #   black
     #   dbt-common
     #   dbt-core
 platformdirs==4.12.4
-    # via jupyter-core
+    # via
+    #   black
+    #   jupyter-core
 pluggy==1.7.0
     # via pytest
 proto-plus==1.29.0
@@ -304,6 +314,8 @@ python-slugify==9.1.3
     # via agate
 pytimeparse==1.1.8
     # via agate
+pytokens==0.4.1
+    # via black
 pytz==2026.6
     # via
     #   dbt-adapters
@@ -338,6 +350,8 @@ rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
+ruff==0.17.5
+    # via -r requirements.txt
 setuptools==84.2.1
     # via
     #   pandas-gbq

@@ -3,6 +3,7 @@
 Invoke from the project root with: python -m scripts.load_bigquery --season 115S3
 Each season gets its own table (lvr_season_a_<season>); reruns replace only that season.
 """
+
 import argparse
 import hashlib
 import io
@@ -25,7 +26,9 @@ ROOT = Path(__file__).resolve().parents[1]
 LOGGER = logging.getLogger(__name__)
 
 SEASON_PATTERN = re.compile(r'^\d{3}S[1-4]$')
-SEASON_URL = 'https://plvr.land.moi.gov.tw/DownloadSeason?season={season}&type=zip&fileName=lvr_landcsv.zip'
+SEASON_URL = (
+    'https://plvr.land.moi.gov.tw/DownloadSeason?season={season}&type=zip&fileName=lvr_landcsv.zip'
+)
 ZIP_MAGIC = b'PK\x03\x04'
 MAX_DOWNLOAD_BYTES = 100_000_000
 MAX_UNCOMPRESSED_BYTES = 500_000_000
@@ -34,7 +37,8 @@ USER_AGENT = 'taiwan-housing-pipeline/1.0'
 # 買賣案件的登記期間；租賃與預售屋的日期不在此段，必須由「之買賣案件」錨定。
 SALES_PERIOD_PATTERN = re.compile(
     r'登記日期\s*自?\s*(\d+)\s*年\s*(\d+)\s*月\s*(\d+)\s*日?\s*至\s*'
-    r'(\d+)\s*年\s*(\d+)\s*月\s*(\d+)\s*日?\s*之買賣案件')
+    r'(\d+)\s*年\s*(\d+)\s*月\s*(\d+)\s*日?\s*之買賣案件'
+)
 COLUMN_TYPES = {'source_row_number': 'INTEGER', 'loaded_at': 'TIMESTAMP'}
 
 
@@ -107,14 +111,17 @@ def check_period(build_time_xml: str, season: str) -> None:
         raise SourceValidationError('Sales registration period not found in build_time.xml')
     numbers = [int(value) for value in match.groups()]
     try:
-        actual = (date(numbers[0] + 1911, numbers[1], numbers[2]),
-                  date(numbers[3] + 1911, numbers[4], numbers[5]))
+        actual = (
+            date(numbers[0] + 1911, numbers[1], numbers[2]),
+            date(numbers[3] + 1911, numbers[4], numbers[5]),
+        )
     except ValueError as exc:
         raise SourceValidationError(f'Invalid date in build_time.xml: {exc}') from exc
     if actual != expected:
         raise SourceValidationError(
             f'Registration period {actual[0]}~{actual[1]} does not match {season} '
-            f'({expected[0]}~{expected[1]})')
+            f'({expected[0]}~{expected[1]})'
+        )
 
 
 def _sha256_of(path: Path) -> str:
@@ -142,8 +149,9 @@ def _cached_zip(season: str, landing: Path) -> Path | None:
     return None
 
 
-def fetch_season(season: str, landing: Path, *, refresh: bool = False,
-                 session: requests.Session | None = None) -> Path:
+def fetch_season(
+    season: str, landing: Path, *, refresh: bool = False, session: requests.Session | None = None
+) -> Path:
     """下載（或重用快取的）官方季檔 ZIP。
 
     Args:
@@ -176,8 +184,9 @@ def fetch_season(season: str, landing: Path, *, refresh: bool = False,
     url = season_url(season)
     chunks: list[bytes] = []
     total = 0
-    with session.get(url, stream=True, timeout=(10, 120),
-                     headers={'User-Agent': USER_AGENT}) as response:
+    with session.get(
+        url, stream=True, timeout=(10, 120), headers={'User-Agent': USER_AGENT}
+    ) as response:
         response.raise_for_status()
         for chunk in response.iter_content(chunk_size=1024 * 1024):
             if not chunk:
@@ -197,11 +206,17 @@ def fetch_season(season: str, landing: Path, *, refresh: bool = False,
     zip_path.write_bytes(payload)
     index_path = landing / 'seasons' / f'{season}.json'
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    index = {'season': season, 'sha256': digest, 'url': url,
-             'downloaded_at': datetime.now(UTC).isoformat()}
+    index = {
+        'season': season,
+        'sha256': digest,
+        'url': url,
+        'downloaded_at': datetime.now(UTC).isoformat(),
+    }
     index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding='utf-8')
     if refresh and previous_sha and previous_sha != digest:
-        LOGGER.warning('Season %s content changed on refresh: %s -> %s', season, previous_sha, digest)
+        LOGGER.warning(
+            'Season %s content changed on refresh: %s -> %s', season, previous_sha, digest
+        )
     return zip_path
 
 
@@ -240,7 +255,9 @@ def prepare(path: Path, season: str, landing: Path) -> tuple[pd.DataFrame, dict]
     check_period(period_xml, season)
     mapping = json.loads((ROOT / 'config/column_mapping.json').read_text(encoding='utf-8'))
     if set(df.columns) != set(mapping) or len(df.columns) != len(mapping):
-        raise SourceValidationError('Source schema changed: review column_mapping.json before loading')
+        raise SourceValidationError(
+            'Source schema changed: review column_mapping.json before loading'
+        )
     df = df.rename(columns=mapping)
     # Preserve raw values and row order; validation is not business filtering.
     start, end = registration_period(season)
@@ -250,15 +267,21 @@ def prepare(path: Path, season: str, landing: Path) -> tuple[pd.DataFrame, dict]
     df['source_row_number'] = range(1, len(df) + 1)
     df['loaded_at'] = datetime.now(UTC)
     metadata = {
-        'sha256': digest, 'season': season, 'source_rows': len(df),
-        'registration_start': start.isoformat(), 'registration_end': end.isoformat(),
-        'encoding': encoding, 'source_file': 'a_lvr_land_a.csv', 'source_period_xml': period_xml,
+        'sha256': digest,
+        'season': season,
+        'source_rows': len(df),
+        'registration_start': start.isoformat(),
+        'registration_end': end.isoformat(),
+        'encoding': encoding,
+        'source_file': 'a_lvr_land_a.csv',
+        'source_period_xml': period_xml,
     }
     target = landing / digest
     target.mkdir(parents=True, exist_ok=True)
     (target / 'source.zip').write_bytes(payload)
     (target / 'metadata.json').write_text(
-        json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
+        json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8'
+    )
     return df, metadata
 
 
@@ -288,8 +311,9 @@ def bigquery_schema(columns: list[str]) -> list[bigquery.SchemaField]:
     return [bigquery.SchemaField(c, COLUMN_TYPES.get(c, 'STRING')) for c in columns]
 
 
-def load(client: bigquery.Client, df: pd.DataFrame, metadata: dict, table_id: str,
-         location: str) -> dict:
+def load(
+    client: bigquery.Client, df: pd.DataFrame, metadata: dict, table_id: str, location: str
+) -> dict:
     """以 WRITE_TRUNCATE 載入單一季別資料表並核對筆數；dataset 不存在時於指定區域建立。
 
     Args:
@@ -317,18 +341,26 @@ def load(client: bigquery.Client, df: pd.DataFrame, metadata: dict, table_id: st
         dataset = client.create_dataset(new_dataset, timeout=20)
     if dataset.location.upper() != location.upper():
         raise SourceValidationError(f'Dataset location is {dataset.location}, not {location}')
-    config = bigquery.LoadJobConfig(schema=bigquery_schema(list(df.columns)),
-                                    write_disposition='WRITE_TRUNCATE')
-    job = client.load_table_from_dataframe(df, table_id, location=location,
-                                           job_config=config, timeout=30)
+    config = bigquery.LoadJobConfig(
+        schema=bigquery_schema(list(df.columns)), write_disposition='WRITE_TRUNCATE'
+    )
+    job = client.load_table_from_dataframe(
+        df, table_id, location=location, job_config=config, timeout=30
+    )
     job.result(timeout=120)
     table = client.get_table(table_id, timeout=20)
     if table.num_rows != len(df):
         raise RuntimeError(f'Row count mismatch: source={len(df)}, BigQuery={table.num_rows}')
     expires = getattr(table, 'expires', None)
-    return {**metadata, 'table_id': table_id, 'loaded_rows': table.num_rows, 'job_id': job.job_id,
-            'location': table.location, 'table_expires': expires.isoformat() if expires else None,
-            'status': 'row_count_verified'}
+    return {
+        **metadata,
+        'table_id': table_id,
+        'loaded_rows': table.num_rows,
+        'job_id': job.job_id,
+        'location': table.location,
+        'table_expires': expires.isoformat() if expires else None,
+        'status': 'row_count_verified',
+    }
 
 
 def drop_season(client: bigquery.Client, table_id: str) -> None:
@@ -378,7 +410,8 @@ def main(argv: list[str] | None = None) -> int:
             client = bigquery.Client(project=args.project)
             result = load(client, df, metadata, table_id, args.location)
             (args.landing / metadata['sha256'] / 'load_result.json').write_text(
-                json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+                json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8'
+            )
     except SourceValidationError as exc:
         LOGGER.error('Source validation failed: %s', exc)
         return 3

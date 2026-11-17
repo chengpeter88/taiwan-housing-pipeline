@@ -5,6 +5,7 @@
 - 執行時會實際連網下載官方季檔，並讀寫 BigQuery（raw 表與 dbt 產出的 staging／marts）。
 - 預設季別與日期取自 <HOUSING_PROJECT_DIR>/config/seasons.json，原始碼不寫死任何值。
 """
+
 import json
 import logging
 import os
@@ -37,15 +38,20 @@ def load_config(root: Path) -> dict:
         config = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError(f'無法讀取季別設定 {path}：{exc}') from exc
-    missing = [key for key in ('seasons', 'min_transaction_date', 'as_of_date')
-               if not config.get(key)]
+    missing = [
+        key for key in ('seasons', 'min_transaction_date', 'as_of_date') if not config.get(key)
+    ]
     if missing:
         raise RuntimeError(f'季別設定 {path} 缺少或為空的欄位：{missing}')
     return config
 
 
-def run_command(args: list[str], root: Path, timeout: int,
-                deterministic_codes: frozenset[int] = DETERMINISTIC_EXIT_CODES) -> str:
+def run_command(
+    args: list[str],
+    root: Path,
+    timeout: int,
+    deterministic_codes: frozenset[int] = DETERMINISTIC_EXIT_CODES,
+) -> str:
     """執行子程序並把輸出寫入 task log，回傳 stdout。
 
     exit code 屬於 deterministic_codes 時拋 AirflowFailException（不重試）；
@@ -53,8 +59,15 @@ def run_command(args: list[str], root: Path, timeout: int,
     """
     log.info('執行指令：%s', ' '.join(args))
     try:
-        result = subprocess.run(args, cwd=root, capture_output=True, text=True,
-                                encoding='utf-8', timeout=timeout, check=False)
+        result = subprocess.run(
+            args,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            timeout=timeout,
+            check=False,
+        )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f'指令逾時（{timeout} 秒）：{" ".join(args)}') from exc
     if result.stdout:
@@ -79,11 +92,15 @@ with DAG(
     max_active_runs=1,
     max_active_tasks=1,
     dagrun_timeout=timedelta(minutes=90),
-    default_args={'retries': 2, 'retry_delay': timedelta(minutes=1),
-                  'execution_timeout': timedelta(minutes=10)},
+    default_args={
+        'retries': 2,
+        'retry_delay': timedelta(minutes=1),
+        'execution_timeout': timedelta(minutes=10),
+    },
     params={
-        'seasons': Param(list(_CONFIG['seasons']), type='array', items={'type': 'string'},
-                         minItems=1),
+        'seasons': Param(
+            list(_CONFIG['seasons']), type='array', items={'type': 'string'}, minItems=1
+        ),
         'min_date': Param(_CONFIG['min_transaction_date'], type='string', format='date'),
         'as_of': Param(_CONFIG['as_of_date'], type='string', format='date'),
         'refresh': Param(False, type='boolean'),
@@ -111,15 +128,17 @@ with DAG(
     def fetch_validate(season: str) -> dict:
         """下載並驗證單一季別，回傳 {season, sha256, source_rows}。"""
         params = get_current_context()['params']
-        args = [str(_PYTHON), '-m', 'scripts.load_bigquery', '--season', season,
-                '--validate-only']
+        args = [str(_PYTHON), '-m', 'scripts.load_bigquery', '--season', season, '--validate-only']
         if params['refresh']:
             args.append('--refresh')
         stdout = run_command(args, _ROOT, timeout=180)
         try:
             metadata = json.loads(stdout)
-            return {'season': season, 'sha256': metadata['sha256'],
-                    'source_rows': metadata['source_rows']}
+            return {
+                'season': season,
+                'sha256': metadata['sha256'],
+                'source_rows': metadata['source_rows'],
+            }
         except (json.JSONDecodeError, KeyError, TypeError) as exc:
             raise AirflowFailException(f'載入器輸出不符合契約（{season}）：{exc}') from exc
 
@@ -129,9 +148,19 @@ with DAG(
         source = _ROOT / 'data' / 'landing' / snapshot['sha256'] / 'source.zip'
         if not source.is_file():
             raise AirflowFailException(f'找不到已驗證的來源檔：{source}')
-        run_command([str(_PYTHON), '-m', 'scripts.load_bigquery',
-                     '--season', snapshot['season'], '--zip', str(source)],
-                    _ROOT, timeout=300)
+        run_command(
+            [
+                str(_PYTHON),
+                '-m',
+                'scripts.load_bigquery',
+                '--season',
+                snapshot['season'],
+                '--zip',
+                str(source),
+            ],
+            _ROOT,
+            timeout=300,
+        )
         return snapshot
 
     # dbt 測試失敗是資料或邏輯問題，重跑也不會過，只會再消耗 BigQuery 查詢額度，所以不重試。
@@ -141,15 +170,28 @@ with DAG(
         params = get_current_context()['params']
         loaded_seasons = sorted(item['season'] for item in loaded)
         if loaded_seasons != list(seasons):
-            raise AirflowFailException(
-                f'已載入季別 {loaded_seasons} 與預期 {list(seasons)} 不一致')
-        variables = {'seasons': list(seasons), 'min_transaction_date': params['min_date'],
-                     'as_of_date': params['as_of']}
+            raise AirflowFailException(f'已載入季別 {loaded_seasons} 與預期 {list(seasons)} 不一致')
+        variables = {
+            'seasons': list(seasons),
+            'min_transaction_date': params['min_date'],
+            'as_of_date': params['as_of'],
+        }
         project_dir = str(_ROOT / 'analytics_bigquery')
-        run_command([str(_PYTHON.parent / 'dbt'), 'build',
-                     '--project-dir', project_dir, '--profiles-dir', project_dir,
-                     '--vars', json.dumps(variables)],
-                    _ROOT, timeout=900, deterministic_codes=frozenset())
+        run_command(
+            [
+                str(_PYTHON.parent / 'dbt'),
+                'build',
+                '--project-dir',
+                project_dir,
+                '--profiles-dir',
+                project_dir,
+                '--vars',
+                json.dumps(variables),
+            ],
+            _ROOT,
+            timeout=900,
+            deterministic_codes=frozenset(),
+        )
 
     season_list = resolve_seasons()
     snapshots = fetch_validate.expand(season=season_list)
