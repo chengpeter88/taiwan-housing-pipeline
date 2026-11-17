@@ -1,17 +1,18 @@
 with typed as (
     select *,
         concat(source_sha256, ':', cast(source_row_number as string)) as source_row_key,
-        case when regexp_contains(trim(transaction_date_roc), r'^[0-9]{7}$') then
+        case when regexp_contains(trim(transaction_date_roc), r'^[0-9]{6,7}$') then
             safe.parse_date('%Y%m%d', concat(
-                cast(safe_cast(substr(trim(transaction_date_roc), 1, 3) as int64) + 1911 as string),
-                substr(trim(transaction_date_roc), 4, 4)))
+                cast(safe_cast(substr(lpad(trim(transaction_date_roc), 7, '0'), 1, 3) as int64) + 1911 as string),
+                substr(lpad(trim(transaction_date_roc), 7, '0'), 4, 4)))
         end as transaction_date,
         safe_cast(total_price_ntd as numeric) as total_price,
         safe_cast(building_area_sqm as numeric) as building_area,
         safe_cast(parking_price_ntd as numeric) as parking_price,
         safe_cast(parking_area_sqm as numeric) as parking_area,
         count(*) over (partition by city_code, serial_no) as serial_occurrences
-    from {{ source('housing_raw', 'lvr_sale') }}
+    from {{ source('housing_raw', 'lvr_season_a') }}
+    where season in {{ season_list() }}
 ), flagged as (
     select *,
         total_price - parking_price as housing_price,

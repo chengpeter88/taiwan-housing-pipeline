@@ -4,5 +4,8 @@ sources:
     database: taiwan-household
     schema: housing_raw
     tables:
-      - name: lvr_sale
-        identifier: "{{ var('raw_snapshot') }}"
+      - name: lvr_season_a
+        identifier: "lvr_season_a_*"
+        description: >
+          每季一張表（lvr_season_a_<季別>），以 BigQuery wildcard table 讀取；
+          由 staging 依 var('seasons') 篩選要納入的季別。

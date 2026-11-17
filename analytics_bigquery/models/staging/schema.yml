@@ -1,7 +1,7 @@
 version: 2
 models:
   - name: stg_lvr_sale
-    description: One source row per snapshot, no filtering or cross-batch deduplication. Original strings remain alongside typed fields.
+    description: One source row per season-table row (seasons selected by var('seasons')), no filtering or deduplication; serial_occurrences is computed across seasons. Original strings remain alongside typed fields.
     columns:
       - name: source_row_key
         data_tests: [not_null, unique]
