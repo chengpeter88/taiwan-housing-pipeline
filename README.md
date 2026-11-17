@@ -43,8 +43,8 @@ uv pip sync requirements.lock --python .venv/Scripts/python.exe
 .venv\Scripts\dbt.exe build --project-dir analytics_bigquery --profiles-dir analytics_bigquery
 # Python 測試、lint 與格式檢查（與 CI 相同）
 .venv\Scripts\python.exe -m pytest -q
-.venv\Scriptsuff.exe check .
-.venv\Scriptslack.exe --check .
+.venv\Scripts\ruff.exe check .
+.venv\Scripts\black.exe --check .
 ```
 
 Linux／macOS 改用 `.venv/bin/python`。
