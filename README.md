@@ -47,6 +47,9 @@ uv pip sync requirements.lock --python .venv/Scripts/python.exe
 .venv\Scripts\python.exe -m scripts.load_bigquery --season 115S3
 # 建模與資料測試
 .venv\Scripts\dbt.exe build --project-dir analytics_bigquery --profiles-dir analytics_bigquery
+# 驗證 BigQuery 實況：三層表是否齊全、筆數／大小／剩餘天數、bronze 與官方檔逐季對帳、
+# build_metadata 與 config 是否一致、每次全量的儲存用量（有問題時 exit code 1；--json 輸出 JSON）
+.venv\Scripts\python.exe -m scripts.verify_bigquery
 # Python 測試、lint 與格式檢查（與 CI 相同）
 .venv\Scripts\python.exe -m pytest -q
 .venv\Scripts\ruff.exe check .
