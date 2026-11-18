@@ -99,3 +99,50 @@ def test_ci_runs_lint_format_and_tests():
     triggers = ci[True] if True in ci else ci['on']  # PyYAML 會把 on 解析成 True
     assert triggers['push']['branches'] == ['main']
     assert 'pull_request' in triggers
+
+
+# ---------- 每日排程與自動更新 ----------
+
+
+def _dag_call_keywords() -> dict:
+    """以 AST 取出 DAG(...) 呼叫的關鍵字參數原始碼（本機沒有安裝 Airflow，無法 import DAG）。"""
+    import ast
+
+    source = (ROOT / 'orchestration/dags/housing_pipeline.py').read_text(encoding='utf-8')
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and getattr(node.func, 'id', None) == 'DAG':
+            return {kw.arg: ast.unparse(kw.value) for kw in node.keywords}
+    raise AssertionError('DAG(...) call not found')
+
+
+def test_dag_is_scheduled_daily_in_taipei_time():
+    keywords = _dag_call_keywords()
+    assert keywords['dag_id'] == "'taipei_housing_pipeline'"
+    assert keywords.get('schedule') not in (None, 'None')
+    assert 'Asia/Taipei' in keywords['schedule']
+    assert keywords['catchup'] == 'False'
+    assert keywords['max_active_runs'] == '1'
+
+
+def test_config_has_scheduling_settings():
+    assert CONFIG['as_of_lag_days'] == 160
+    assert CONFIG['refresh_before_expiry_days'] > 0
+
+
+def test_compose_restarts_services_after_reboot():
+    services = _yaml('orchestration/compose.yml')['services']
+    for name in ('postgres', 'airflow'):
+        assert services[name].get('restart') == 'unless-stopped', name
+
+
+def test_build_metadata_model_records_successful_build():
+    sql = (ROOT / 'analytics_bigquery/models/marts/build_metadata.sql').read_text(encoding='utf-8')
+    # 必須依賴所有 gold 彙總表，確保只有在上游全部建好、測試通過後才寫入
+    for model in [
+        'agg_district_month_price',
+        'agg_district_quarter_price',
+        'agg_district_segment_price',
+        'agg_district_budget',
+        'agg_city_month_market',
+    ]:
+        assert f"ref('{model}')" in sql, model

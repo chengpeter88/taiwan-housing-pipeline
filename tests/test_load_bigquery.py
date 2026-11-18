@@ -107,6 +107,7 @@ class FakeClient:
     ):
         self.num_rows, self.location, self.dataset_exists = num_rows, location, dataset_exists
         self.loaded, self.deleted, self.created = [], [], []
+        self.events = []  # 依序記錄 delete／load，驗證先刪後載
 
     def get_dataset(self, dataset_id, **kwargs):
         if not self.dataset_exists:
@@ -120,6 +121,7 @@ class FakeClient:
 
     def load_table_from_dataframe(self, df, table_id, **kwargs):
         self.loaded.append((df, table_id, kwargs))
+        self.events.append(('load', table_id))
         return SimpleNamespace(job_id='job-1', result=lambda **kw: None)
 
     def get_table(self, table_id, **kwargs):
@@ -128,6 +130,7 @@ class FakeClient:
 
     def delete_table(self, table_id, **kwargs):
         self.deleted.append((table_id, kwargs))
+        self.events.append(('delete', table_id))
 
 
 # ---------- 季別解析 ----------
@@ -318,6 +321,19 @@ def test_load_truncates_season_table_and_verifies_rows(tmp_path):
     assert result['loaded_rows'] == 3 and result['status'] == 'row_count_verified'
     assert result['table_id'] == 'p.housing_bronze.lvr_season_a_115S3'
     assert 'table_expires' in result
+
+
+def test_load_recreates_table_to_reset_sandbox_expiry(tmp_path):
+    # BigQuery sandbox 的到期日在建表時決定，WRITE_TRUNCATE 重載不會延長；
+    # 必須先刪表再載入，重建後才會重新計算 60 天到期
+    source = tmp_path / 'in.zip'
+    source.write_bytes(make_zip())
+    df, metadata = lb.prepare(source, '115S3', tmp_path / 'landing')
+    client = FakeClient()
+    table_id = 'p.housing_bronze.lvr_season_a_115S3'
+    lb.load(client, df, metadata, table_id, 'US')
+    assert client.events == [('delete', table_id), ('load', table_id)]
+    assert client.deleted[0] == (table_id, {'not_found_ok': True})
 
 
 def test_load_raises_on_row_count_mismatch(tmp_path):
