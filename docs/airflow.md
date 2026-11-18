@@ -115,5 +115,8 @@ docker compose --env-file orchestration/.env -f orchestration/compose.yml down
 | 格式錯誤季別 abc | resolve_seasons 失敗，下游未執行 |
 | medallion 分層（11-18） | 全量執行成功，223 秒；dbt 寫入 housing_silver、housing_gold |
 | Gold 分析表（11-18） | 全量執行成功，343 秒；dbt build 78 項通過（7 個模型），遠低於 build_models 的 15 分鐘上限 |
+| 每日排程：首次補建（11-18） | 原因 `no_successful_build`、`missing_tables`；28 個任務全部成功，寫入 build_metadata |
+| 每日排程：狀態一致（11-18） | `should_run=False`，gate 之後全部 skipped |
+| 每日排程：快到期（11-18） | `refresh_before_expiry_days=70`，原因只有 `expiring_tables`；全量成功，dbt 84 項通過，bronze 到期日由 2027-01-16 延到 2027-01-17 |
 
-尚未做的部分：展示版本切換與回復機制（dbt 直接更新 housing_gold）、正式部署、通知，以及 Airflow 端的自動排程。
+尚未做的部分：展示版本切換與回復機制（dbt 直接更新 housing_gold）、正式部署、失敗通知。
