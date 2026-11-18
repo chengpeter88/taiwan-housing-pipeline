@@ -61,6 +61,7 @@ Linux／macOS 改用 `.venv/bin/python`。
 | [docs/staging.md](docs/staging.md) | 分析期間的依據、排除規則、unit tests |
 | [docs/marts.md](docs/marts.md) | 交易明細與行政區月中位數、驗證結果 |
 | [docs/airflow.md](docs/airflow.md) | DAG 流程、重試策略、Docker 啟動與驗收紀錄 |
+| [docs/looker_studio.md](docs/looker_studio.md) | Looker Studio 報表建置規格：資料來源、欄位設定、5 頁版面、分享與維護 |
 | [docs/dataset_review.md](docs/dataset_review.md) | 單季資料盤點（清理規則的推導依據，歷史紀錄） |
 
 ## 清理規則與取捨
