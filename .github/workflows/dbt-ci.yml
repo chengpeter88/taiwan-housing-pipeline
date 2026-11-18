@@ -1,0 +1,49 @@
+name: dbt CI
+# Builds every dbt model as a view into ci_housing_silver / ci_housing_gold and runs all dbt tests.
+# Auth: Workload Identity Federation (no stored keys). Setup: docs/ci_dbt.md
+on:
+  pull_request:
+    paths:
+      - analytics_bigquery/**
+      - config/seasons.json
+      - requirements.lock
+      - .github/workflows/dbt-ci.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  # One run at a time writes ci_housing_*; queue the rest instead of cancelling mid-build.
+  group: dbt-ci
+  cancel-in-progress: false
+  queue: max
+jobs:
+  dbt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check repository variables
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          CI_SERVICE_ACCOUNT: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$CI_SERVICE_ACCOUNT" ]; then
+            echo "::error::Set repository variables GCP_WIF_PROVIDER and GCP_CI_SERVICE_ACCOUNT (repository_id=${{ github.repository_id }}, see docs/ci_dbt.md)"
+            exit 1
+          fi
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Install locked dependencies
+        run: |
+          uv venv --python 3.12
+          uv pip sync requirements.lock
+      - name: dbt build (ci target, views only)
+        run: .venv/bin/dbt build --project-dir analytics_bigquery --profiles-dir analytics_bigquery --target ci
+      - name: Prove production datasets are not writable
+        run: .venv/bin/python -m scripts.check_ci_permissions

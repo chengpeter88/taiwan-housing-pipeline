@@ -64,6 +64,7 @@ Linux／macOS 改用 `.venv/bin/python`。
 | [docs/staging.md](docs/staging.md) | 分析期間的依據、排除規則、unit tests |
 | [docs/marts.md](docs/marts.md) | 交易明細與行政區月中位數、驗證結果 |
 | [docs/airflow.md](docs/airflow.md) | DAG 流程、重試策略、Docker 啟動與驗收紀錄 |
+| [docs/ci_dbt.md](docs/ci_dbt.md) | CI 以 Workload Identity Federation 跑 dbt：權限設計、一次性設定、失敗判斷 |
 | [docs/looker_studio.md](docs/looker_studio.md) | Looker Studio 報表建置規格：資料來源、欄位設定、5 頁版面、分享與維護 |
 | [docs/dataset_review.md](docs/dataset_review.md) | 單季資料盤點（清理規則的推導依據，歷史紀錄） |
 
@@ -90,7 +91,9 @@ Linux／macOS 改用 `.venv/bin/python`。
 - BigQuery 12 張季表的列數與官方 ZIP 逐季一致；pandas 從 Silver 獨立重算 fact 衍生欄位與全部 Gold 彙總表，每一欄都完全一致。
 - Airflow 3.4.0 容器：12 季全量執行成功、同參數重跑筆數不變、未發布與格式錯誤的季別在對應任務失敗且不重試。
 
-`.github/workflows/ci.yml` 在 push 到 main 與每個 PR 時依序執行 `ruff check`、`black --check` 與 pytest，不下載官方檔，也不需要雲端金鑰。格式與 lint 設定在 `pyproject.toml`（行寬 100、保留單引號）。dbt 需要 BigQuery 連線，目前只在本機與 Airflow 執行。
+`.github/workflows/ci.yml` 在 push 到 main 與每個 PR 時依序執行 `ruff check`、`black --check` 與 pytest，不下載官方檔，也不需要雲端金鑰。格式與 lint 設定在 `pyproject.toml`（行寬 100、保留單引號）。
+
+`.github/workflows/dbt-ci.yml` 在 PR 改到 dbt 相關檔案時，以 Workload Identity Federation 取得短期憑證，對真實 BigQuery 執行 `dbt build --target ci`。模型一律建成 view，寫入 `ci_housing_*`；CI 帳號對正式 silver／gold 沒有任何權限，最後一步會實際嘗試寫入並確認被拒絕。設定與失敗判斷見 [docs/ci_dbt.md](docs/ci_dbt.md)。
 
 ## 限制與下一步
 
@@ -102,7 +105,6 @@ Linux／macOS 改用 `.venv/bin/python`。
 | 下一步 | 完成標準 |
 | --- | --- |
 | 展示 | 依 [looker_studio.md](docs/looker_studio.md) 建立 Looker Studio 報表並分享 |
-| CI 執行 dbt | GitHub Actions 以 Workload Identity Federation 連 BigQuery，PR 時跑 dbt build 到 `ci_housing_*` |
 | 失敗通知 | 排程失敗時通知（Email 或其他管道） |
 | 擴充範圍 | 其他縣市；評估是否納入子表 |
 

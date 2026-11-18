@@ -146,3 +146,121 @@ def test_build_metadata_model_records_successful_build():
         'agg_city_month_market',
     ]:
         assert f"ref('{model}')" in sql, model
+
+
+# ---------- CI 以 WIF 執行 dbt（ci target） ----------
+
+DBT_CI = '.github/workflows/dbt-ci.yml'
+FORBIDDEN_ROLES = ['roles/editor', 'roles/owner', 'roles/bigquery.admin', 'roles/bigquery.user']
+
+
+def _triggers(workflow: dict) -> dict:
+    return workflow[True] if True in workflow else workflow['on']  # PyYAML 會把 on 解析成 True
+
+
+def _dbt_job() -> dict:
+    jobs = _yaml(DBT_CI)['jobs']
+    assert list(jobs) == ['dbt']
+    return jobs['dbt']
+
+
+def _step_index(steps: list[dict], needle: str) -> int:
+    for index, step in enumerate(steps):
+        if needle in step.get('uses', '') or needle in step.get('run', ''):
+            return index
+    raise AssertionError(f'step not found: {needle}')
+
+
+def test_dbt_ci_runs_on_relevant_prs_and_manual_dispatch_only():
+    triggers = _triggers(_yaml(DBT_CI))
+    assert set(triggers) == {'pull_request', 'workflow_dispatch'}
+    paths = triggers['pull_request']['paths']
+    for path in ['analytics_bigquery/**', 'config/seasons.json', DBT_CI]:
+        assert path in paths
+
+
+def test_dbt_ci_queues_runs_instead_of_cancelling():
+    # 同時只能有一個 run 寫 ci_housing_*；排隊而不是中途取消，避免留下半新半舊的表
+    concurrency = _yaml(DBT_CI)['concurrency']
+    assert concurrency['group'] == 'dbt-ci'
+    assert concurrency['cancel-in-progress'] is False
+    assert concurrency['queue'] == 'max'
+
+
+def test_dbt_ci_grants_id_token_only_to_dbt_job():
+    workflow = _yaml(DBT_CI)
+    assert workflow['permissions'] == {'contents': 'read'}
+    assert _dbt_job()['permissions'] == {'contents': 'read', 'id-token': 'write'}
+    assert 'id-token' not in (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+
+
+def test_dbt_ci_authenticates_with_wif_and_no_key():
+    steps = _dbt_job()['steps']
+    auth = steps[_step_index(steps, 'google-github-actions/auth@v3')]
+    assert auth['with'] == {
+        'workload_identity_provider': '${{ vars.GCP_WIF_PROVIDER }}',
+        'service_account': '${{ vars.GCP_CI_SERVICE_ACCOUNT }}',
+    }
+    # checkout 必須在 auth 之前，否則 auth 產生的憑證檔會被清掉
+    assert _step_index(steps, 'actions/checkout') < _step_index(steps, 'google-github-actions/auth')
+    text = (ROOT / DBT_CI).read_text(encoding='utf-8')
+    for secret_hint in ['credentials_json', 'keyfile', 'secrets.']:
+        assert secret_hint not in text
+
+
+def test_dbt_ci_fails_fast_when_repository_variables_missing():
+    steps = _dbt_job()['steps']
+    check = _step_index(steps, 'GCP_WIF_PROVIDER')
+    assert check < _step_index(steps, 'google-github-actions/auth')
+    # 失敗訊息附上 repository_id，供 setup_wif.sh 使用
+    assert 'github.repository_id' in steps[check]['run']
+
+
+def test_dbt_ci_builds_ci_target_then_proves_prod_is_not_writable():
+    steps = _dbt_job()['steps']
+    build = steps[_step_index(steps, 'dbt build')]['run']
+    for flag in ['--project-dir analytics_bigquery', '--profiles-dir analytics_bigquery']:
+        assert flag in build
+    assert '--target ci' in build
+    guard = _step_index(steps, 'scripts.check_ci_permissions')
+    assert guard > _step_index(steps, 'dbt build')
+
+
+def test_profiles_ci_output_writes_only_ci_datasets_with_adc():
+    profiles = _yaml('analytics_bigquery/profiles.yml')['taiwan_housing_bigquery']
+    assert profiles['target'] == 'prod'
+    prod, ci = profiles['outputs']['prod'], profiles['outputs']['ci']
+    assert ci['method'] == 'oauth'
+    assert not {'keyfile', 'keyfile_json'} & set(ci)
+    assert ci['dataset'].startswith('ci_')
+    assert ci['project'] == prod['project'] and ci['location'] == prod['location']
+    assert ci['job_retries'] >= 1
+    assert ci['job_execution_timeout_seconds'] >= 60
+
+
+def test_ci_target_materializes_views_to_save_lifetime_storage():
+    # sandbox 儲存是終身 10 GiB、刪除不退：CI 建 view 不佔儲存，prod 仍建 table
+    materialized = _yaml('analytics_bigquery/dbt_project.yml')['models']['taiwan_housing_bigquery'][
+        '+materialized'
+    ]
+    assert "target.name == 'ci'" in materialized
+    assert "'view'" in materialized and "'table'" in materialized
+
+
+def test_setup_wif_script_grants_least_privilege():
+    script = (ROOT / 'infra/setup_wif.sh').read_text(encoding='utf-8')
+    assert script.startswith('#!/usr/bin/env bash')
+    assert 'set -euo pipefail' in script
+    # 只接受此 repo 的不可重用 ID，不用名稱比對
+    assert "--attribute-condition=\"assertion.repository_id == '${REPO_ID}'\"" in script
+    assert 'attribute.repository_id/${REPO_ID}' in script
+    assert 'roles/iam.workloadIdentityUser' in script
+    assert 'roles/bigquery.jobUser' in script
+    for role in FORBIDDEN_ROLES:
+        assert role not in script
+    # dataset 層授權：bronze 只讀、ci_* 可寫；正式 silver／gold 不給任何權限
+    assert 'grant_dataset housing_bronze READER' in script
+    assert 'grant_dataset ci_housing_silver WRITER' in script
+    assert 'grant_dataset ci_housing_gold WRITER' in script
+    for prod in ['grant_dataset housing_silver', 'grant_dataset housing_gold']:
+        assert prod not in script

@@ -11,3 +11,14 @@ taiwan_housing_bigquery:
       threads: 1
       job_execution_timeout_seconds: 60
       job_retries: 0
+    ci:
+      # GitHub Actions: google-github-actions/auth writes short-lived WIF credentials as ADC.
+      # The ci service account can only write ci_housing_silver / ci_housing_gold.
+      type: bigquery
+      method: oauth
+      project: taiwan-household
+      dataset: ci_housing_gold
+      location: US
+      threads: 1
+      job_execution_timeout_seconds: 300
+      job_retries: 1

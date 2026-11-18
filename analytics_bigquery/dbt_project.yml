@@ -12,7 +12,8 @@ vars:
   budget_months: 12
 models:
   taiwan_housing_bigquery:
-    +materialized: table
+    # Sandbox storage is a lifetime 10 GiB quota (not refunded on delete): CI builds views only.
+    +materialized: "{{ 'view' if target.name == 'ci' else 'table' }}"
     # Medallion layers: bronze is written by the Python loader; dbt writes silver and gold.
     staging:
       +schema: silver
