@@ -13,7 +13,7 @@ flowchart LR
     C --> D[Silver: housing_silver<br>stg_lvr_sale]
     D --> E[Gold: housing_gold<br>fct_housing_deal]
     E --> F[Gold: housing_gold<br>agg_district_month_price]
-    G[Airflow DAG<br>手動觸發] -.-> B
+    G[Airflow DAG<br>每日自動判斷] -.-> B
     G -.-> D
 ```
 
@@ -82,8 +82,8 @@ Linux／macOS 改用 `.venv/bin/python`。
 
 2026-11-17 驗證結果：
 
-- pytest 68 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性。
-- `dbt build` 78 項通過（7 個模型）：11 組 unit tests 以手算的小資料覆蓋 12 種排除原因、6 位數日期、屋齡週年邊界、分組邊界、精確分位數、年增率、滾動中位數與 NULL 處理；其餘資料測試涵蓋唯一鍵、允許值、季別完整性、各表與 fact 及月表的交叉對帳、價格公式與分位數順序。
+- pytest 103 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性、每日排程的新季別偵測、截止日規則與執行判斷。
+- `dbt build` 84 項通過（8 個模型）：11 組 unit tests 以手算的小資料覆蓋 12 種排除原因、6 位數日期、屋齡週年邊界、分組邊界、精確分位數、年增率、滾動中位數與 NULL 處理；其餘資料測試涵蓋唯一鍵、允許值、季別完整性、各表與 fact 及月表的交叉對帳、價格公式與分位數順序。
 - BigQuery 12 張季表的列數與官方 ZIP 逐季一致；pandas 從 Silver 獨立重算 fact 衍生欄位與全部 Gold 彙總表，每一欄都完全一致。
 - Airflow 3.4.0 容器：12 季全量執行成功、同參數重跑筆數不變、未發布與格式錯誤的季別在對應任務失敗且不重試。
 
@@ -91,16 +91,16 @@ Linux／macOS 改用 `.venv/bin/python`。
 
 ## 限制與下一步
 
-- BigQuery sandbox 的表在 60 天後自動刪除，重建方式見 [raw_loading.md](docs/raw_loading.md)。
-- dbt 直接更新 `housing_gold`，尚未有展示版本切換與回復機制。
-- Airflow 只接受手動觸發；尚未做遠端部署、通知或來源撤回案件同步。
+- Airflow 每天台北中午自動判斷：有新季別、狀態改變、缺表或 14 天內到期才全量重跑，並自動延長 BigQuery sandbox 的 60 天到期（見 [airflow.md](docs/airflow.md)）。它跑在本機 Docker，電腦關機時不會執行。
+- dbt 直接更新 `housing_gold`，尚未有展示版本切換與回復機制；`housing_gold.build_metadata` 記錄最近一次成功建置的季別與截止日。
+- 尚未做遠端部署、失敗通知或來源撤回案件同步。
 - 目前只有台北買賣主表，子表未 join，避免一對多造成總價重複。
 
 | 下一步 | 完成標準 |
 | --- | --- |
-| CI 執行 dbt | GitHub Actions 以 Workload Identity Federation 連 BigQuery，PR 時跑 dbt build |
-| 展示 | Looker Studio 或其他展示層讀取 marts，標明分析口徑與限制 |
-| 自動排程 | 新季別發布後自動載入；加入發布閘門與失敗通知 |
+| 展示 | 依 [looker_studio.md](docs/looker_studio.md) 建立 Looker Studio 報表並分享 |
+| CI 執行 dbt | GitHub Actions 以 Workload Identity Federation 連 BigQuery，PR 時跑 dbt build 到 `ci_housing_*` |
+| 失敗通知 | 排程失敗時通知（Email 或其他管道） |
 | 擴充範圍 | 其他縣市；評估是否納入子表 |
 
 ## 來源與授權

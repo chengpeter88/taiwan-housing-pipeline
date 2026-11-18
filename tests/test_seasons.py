@@ -56,8 +56,8 @@ class FakeClient:
 
 def make_models_dir(tmp_path: Path) -> Path:
     models = tmp_path / 'models'
-    (models / 'staging').mkdir(parents=True)
-    (models / 'marts').mkdir(parents=True)
+    (models / 'staging').mkdir(parents=True, exist_ok=True)
+    (models / 'marts').mkdir(parents=True, exist_ok=True)
     (models / 'staging' / 'stg_lvr_sale.sql').write_text('select 1', encoding='utf-8')
     (models / 'staging' / 'schema.yml').write_text('version: 2', encoding='utf-8')
     (models / 'marts' / 'fct_housing_deal.sql').write_text('select 1', encoding='utf-8')

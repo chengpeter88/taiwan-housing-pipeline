@@ -1,25 +1,27 @@
-"""台北實價登錄管線的 Airflow 3 DAG：多季逐季下載、驗證、載入，再執行 dbt。
+"""台北實價登錄管線的 Airflow 3 DAG：每天台北中午自動判斷，需要時才全量執行。
 
 注意：
-- 只接受手動觸發（schedule=None），不會自動排程。
-- 執行時會實際連網下載官方季檔，並讀寫 BigQuery（raw 表與 dbt 產出的 staging／marts）。
-- 預設季別與日期取自 <HOUSING_PROJECT_DIR>/config/seasons.json，原始碼不寫死任何值。
+- 每天 12:00（Asia/Taipei）先跑 plan／gate：有新季別發布、上次成功建置的狀態與期望不同、
+  或任一層（bronze／silver／gold）的資料表缺少或快到期（sandbox 表 60 天到期）才往下跑，
+  否則整串跳過。新季別與截止日由 scripts/seasons.py 自動推算。
+- 需要執行時會連網下載官方季檔，並讀寫 BigQuery（bronze 表與 dbt 產出的 silver／gold）。
+- 基準季別與日期取自 <HOUSING_PROJECT_DIR>/config/seasons.json，原始碼不寫死任何值。
+- 手動觸發可用參數 force 強制全量、refresh 重新下載、refresh_before_expiry_days 調整到期門檻。
 """
 
 import json
 import logging
 import os
-import re
 import subprocess
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-from airflow.sdk import DAG, Param, get_current_context, task
+from airflow.sdk import DAG, CronTriggerTimetable, Param, get_current_context, task
 from airflow.sdk.exceptions import AirflowFailException
 
 log = logging.getLogger(__name__)
 
-SEASON_PATTERN = re.compile(r'^\d{3}S[1-4]$')
 # 載入器約定：2 為參數錯誤、3 為確定性驗證錯誤，重試也不會成功。
 DETERMINISTIC_EXIT_CODES = frozenset({2, 3})
 
@@ -38,9 +40,14 @@ def load_config(root: Path) -> dict:
         config = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError(f'無法讀取季別設定 {path}：{exc}') from exc
-    missing = [
-        key for key in ('seasons', 'min_transaction_date', 'as_of_date') if not config.get(key)
-    ]
+    required = (
+        'seasons',
+        'min_transaction_date',
+        'as_of_date',
+        'as_of_lag_days',
+        'refresh_before_expiry_days',
+    )
+    missing = [key for key in required if config.get(key) in (None, '', [])]
     if missing:
         raise RuntimeError(f'季別設定 {path} 缺少或為空的欄位：{missing}')
     return config
@@ -85,9 +92,9 @@ _ROOT, _PYTHON = project_paths()
 _CONFIG = load_config(_ROOT)
 
 with DAG(
-    dag_id='taipei_housing_manual',
-    start_date=datetime(2026, 11, 16, tzinfo=UTC),
-    schedule=None,
+    dag_id='taipei_housing_pipeline',
+    start_date=datetime(2026, 11, 16, tzinfo=ZoneInfo('Asia/Taipei')),
+    schedule=CronTriggerTimetable('0 12 * * *', timezone='Asia/Taipei'),
     catchup=False,
     max_active_runs=1,
     max_active_tasks=1,
@@ -98,31 +105,56 @@ with DAG(
         'execution_timeout': timedelta(minutes=10),
     },
     params={
-        'seasons': Param(
-            list(_CONFIG['seasons']), type='array', items={'type': 'string'}, minItems=1
-        ),
-        'min_date': Param(_CONFIG['min_transaction_date'], type='string', format='date'),
-        'as_of': Param(_CONFIG['as_of_date'], type='string', format='date'),
+        'force': Param(False, type='boolean'),
         'refresh': Param(False, type='boolean'),
+        'refresh_before_expiry_days': Param(
+            _CONFIG['refresh_before_expiry_days'], type='integer', minimum=1
+        ),
     },
-    tags=['housing', 'bigquery', 'manual'],
+    tags=['housing', 'bigquery', 'scheduled'],
 ) as dag:
 
-    @task
-    def resolve_seasons() -> list[str]:
-        """驗證 params 並回傳去重、排序後的季別清單。"""
+    @task(execution_timeout=timedelta(minutes=10))
+    def plan() -> dict:
+        """偵測新季別並比對 BigQuery 狀態，回傳執行計畫（scripts.seasons plan 的 JSON）。"""
         params = get_current_context()['params']
-        seasons = params['seasons']
-        invalid = [s for s in seasons if not isinstance(s, str) or not SEASON_PATTERN.match(s)]
-        if invalid:
-            raise AirflowFailException(f'季別格式不合法：{invalid}')
-        resolved = sorted(set(seasons))
-        if not resolved:
-            raise AirflowFailException('季別清單不可為空')
-        if params['min_date'] > params['as_of']:
-            raise AirflowFailException('min_date 不可晚於 as_of')
-        log.info('本次處理季別：%s', resolved)
-        return resolved
+        stdout = run_command(
+            [
+                str(_PYTHON),
+                '-m',
+                'scripts.seasons',
+                'plan',
+                '--refresh-days',
+                str(params['refresh_before_expiry_days']),
+            ],
+            _ROOT,
+            timeout=480,
+        )
+        try:
+            result = json.loads(stdout)
+            result['seasons'], result['should_run'], result['dbt_vars']
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise AirflowFailException(f'規劃輸出不符合契約：{exc}') from exc
+        return result
+
+    @task.short_circuit
+    def gate(plan_output: dict) -> bool:
+        """需要執行（或手動強制）才放行；否則下游全部 skipped。"""
+        params = get_current_context()['params']
+        proceed = bool(plan_output['should_run'] or params['force'])
+        log.info(
+            '執行判斷：proceed=%s force=%s reasons=%s new_seasons=%s',
+            proceed,
+            params['force'],
+            plan_output['reasons'],
+            plan_output['new_seasons'],
+        )
+        return proceed
+
+    @task
+    def season_list(plan_output: dict) -> list[str]:
+        """取出計畫的季別清單（dynamic task mapping 不能直接對 dict 的鍵展開）。"""
+        return list(plan_output['seasons'])
 
     @task(execution_timeout=timedelta(minutes=5))
     def fetch_validate(season: str) -> dict:
@@ -144,7 +176,7 @@ with DAG(
 
     @task(execution_timeout=timedelta(minutes=8))
     def load_season(snapshot: dict) -> dict:
-        """以驗證過的同一份檔案把單一季別載入 BigQuery。"""
+        """以驗證過的同一份檔案把單一季別載入 BigQuery（載入器會先刪表以重設到期日）。"""
         source = _ROOT / 'data' / 'landing' / snapshot['sha256'] / 'source.zip'
         if not source.is_file():
             raise AirflowFailException(f'找不到已驗證的來源檔：{source}')
@@ -165,17 +197,13 @@ with DAG(
 
     # dbt 測試失敗是資料或邏輯問題，重跑也不會過，只會再消耗 BigQuery 查詢額度，所以不重試。
     @task(execution_timeout=timedelta(minutes=25), retries=0)
-    def build_models(seasons: list[str], loaded: list[dict]) -> None:
-        """全部季別載入完成後執行 dbt build。"""
-        params = get_current_context()['params']
+    def build_models(plan_output: dict, loaded: list[dict]) -> None:
+        """全部季別載入完成後，以計畫的 dbt_vars 執行 dbt build。"""
+        variables = plan_output['dbt_vars']
+        expected = sorted(variables['seasons'])
         loaded_seasons = sorted(item['season'] for item in loaded)
-        if loaded_seasons != list(seasons):
-            raise AirflowFailException(f'已載入季別 {loaded_seasons} 與預期 {list(seasons)} 不一致')
-        variables = {
-            'seasons': list(seasons),
-            'min_transaction_date': params['min_date'],
-            'as_of_date': params['as_of'],
-        }
+        if loaded_seasons != expected:
+            raise AirflowFailException(f'已載入季別 {loaded_seasons} 與預期 {expected} 不一致')
         project_dir = str(_ROOT / 'analytics_bigquery')
         run_command(
             [
@@ -193,7 +221,10 @@ with DAG(
             deterministic_codes=frozenset(),
         )
 
-    season_list = resolve_seasons()
-    snapshots = fetch_validate.expand(season=season_list)
+    plan_output = plan()
+    gate_result = gate(plan_output)
+    seasons = season_list(plan_output)
+    gate_result >> seasons
+    snapshots = fetch_validate.expand(season=seasons)
     loaded_snapshots = load_season.expand(snapshot=snapshots)
-    build_models(season_list, loaded_snapshots)
+    build_models(plan_output, loaded_snapshots)

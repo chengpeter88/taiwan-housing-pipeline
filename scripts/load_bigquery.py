@@ -341,6 +341,9 @@ def load(
         dataset = client.create_dataset(new_dataset, timeout=20)
     if dataset.location.upper() != location.upper():
         raise SourceValidationError(f'Dataset location is {dataset.location}, not {location}')
+    # BigQuery sandbox 的資料表到期日在建表時決定，WRITE_TRUNCATE 重載不會延長；
+    # 先刪表再載入，重建後才會重新計算 60 天到期。
+    client.delete_table(table_id, not_found_ok=True)
     config = bigquery.LoadJobConfig(
         schema=bigquery_schema(list(df.columns)), write_disposition='WRITE_TRUNCATE'
     )

@@ -2,6 +2,7 @@ name: housing-airflow
 services:
   postgres:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: airflow
       # 本機自用的簡單密碼；Postgres 不對外開埠，只有 Docker 內網的 Airflow 連得到
@@ -17,6 +18,7 @@ services:
     mem_limit: 512m
     cpus: 0.5
   airflow:
+    restart: unless-stopped
     build:
       context: ..
       dockerfile: orchestration/Dockerfile

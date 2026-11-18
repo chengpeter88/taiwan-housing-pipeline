@@ -159,3 +159,18 @@ models:
         data_tests: [not_null]
       - name: deal_count_yoy_ratio
         description: deal_count / same month one year earlier - 1; NULL when missing.
+
+  - name: build_metadata
+    description: >
+      Single row describing the last successful dbt build (seasons and analysis window).
+      Built last; skipped when any upstream test fails. Airflow compares it with the expected
+      state each day to decide whether to rebuild.
+    columns:
+      - name: seasons
+        data_tests: [not_null]
+      - name: min_transaction_date
+        data_tests: [not_null]
+      - name: as_of_date
+        data_tests: [not_null]
+      - name: built_at
+        data_tests: [not_null]
