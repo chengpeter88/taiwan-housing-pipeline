@@ -9,6 +9,7 @@ analytics_bigquery/logs/
 *.tmp
 *.zip
 orchestration/.env
+docs/
 
 
 # Personal / machine-specific files (kept locally, not shared)

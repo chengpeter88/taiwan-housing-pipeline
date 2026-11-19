@@ -1,6 +1,6 @@
 name: dbt CI
 # Builds every dbt model as a view into ci_housing_silver / ci_housing_gold and runs all dbt tests.
-# Auth: Workload Identity Federation (no stored keys). Setup: docs/ci_dbt.md
+# Auth: Workload Identity Federation (no stored keys). Setup: infra/setup_wif.sh
 on:
   pull_request:
     paths:
@@ -31,7 +31,7 @@ jobs:
           CI_SERVICE_ACCOUNT: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
         run: |
           if [ -z "$WIF_PROVIDER" ] || [ -z "$CI_SERVICE_ACCOUNT" ]; then
-            echo "::error::Set repository variables GCP_WIF_PROVIDER and GCP_CI_SERVICE_ACCOUNT (repository_id=${{ github.repository_id }}, see docs/ci_dbt.md)"
+            echo "::error::Set repository variables GCP_WIF_PROVIDER and GCP_CI_SERVICE_ACCOUNT (repository_id=${{ github.repository_id }}, see infra/setup_wif.sh)"
             exit 1
           fi
       - uses: google-github-actions/auth@v3

@@ -2,7 +2,8 @@ name: Dashboard
 # Builds the Evidence dashboard from housing_gold and publishes it to GitHub Pages.
 # Auth: Workload Identity Federation; the dashboard account can only read housing_gold and only
 # from the main branch. Pull requests never trigger this workflow (public repository).
-# Setup and failure diagnosis: docs/dashboard.md
+# One-time setup: infra/setup_wif.sh, repository variable GCP_DASHBOARD_SERVICE_ACCOUNT,
+# and Settings > Pages > Source = GitHub Actions.
 on:
   push:
     branches: [main]
@@ -39,7 +40,7 @@ jobs:
           DASHBOARD_SERVICE_ACCOUNT: ${{ vars.GCP_DASHBOARD_SERVICE_ACCOUNT }}
         run: |
           if [ -z "$WIF_PROVIDER" ] || [ -z "$DASHBOARD_SERVICE_ACCOUNT" ]; then
-            echo "::error::Set repository variables GCP_WIF_PROVIDER and GCP_DASHBOARD_SERVICE_ACCOUNT (repository_id=${{ github.repository_id }}, see docs/dashboard.md)"
+            echo "::error::Set repository variables GCP_WIF_PROVIDER and GCP_DASHBOARD_SERVICE_ACCOUNT (repository_id=${{ github.repository_id }}, see infra/setup_wif.sh)"
             exit 1
           fi
       - uses: google-github-actions/auth@v3

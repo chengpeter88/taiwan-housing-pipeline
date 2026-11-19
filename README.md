@@ -4,7 +4,7 @@
 
 **[開啟儀表板](https://chengpeter88.github.io/taiwan-housing-pipeline/)**　·　資料：臺北市住宅買賣 2023-10 ～ 2026-03，共 23,716 筆
 
-[![儀表板首頁：KPI 與滾動中位單價](docs/images/dashboard_home.png)](https://chengpeter88.github.io/taiwan-housing-pipeline/)
+[![儀表板首頁：KPI 與滾動中位單價](assets/dashboard_home.png)](https://chengpeter88.github.io/taiwan-housing-pipeline/)
 
 ## 看到什麼
 
@@ -17,7 +17,7 @@
 
 數字是成交中位數，不是品質調整後的房價指數；量縮與信用管制的時間相近，但沒有證明因果。完整說明與更多頁面見儀表板。
 
-[![型態 × 屋齡：各區、各屋齡帶的大樓中位單價](docs/images/dashboard_segments.png)](https://chengpeter88.github.io/taiwan-housing-pipeline/segments)
+[![型態 × 屋齡：各區、各屋齡帶的大樓中位單價](assets/dashboard_segments.png)](https://chengpeter88.github.io/taiwan-housing-pipeline/segments)
 
 ## 怎麼做的
 
@@ -41,7 +41,7 @@ flowchart LR
 | 排程 | 每天判斷有沒有新季別、表是否快到期，需要才全量重跑 | Airflow 3（Docker） |
 | 發布 | 查詢 Gold 彙總表，建置靜態網站並發布 | Evidence、GitHub Pages |
 
-73,133 筆原始資料經 6 道規則篩出 30,756 筆合格房地交易，其中 23,716 筆為住宅。被排除的每一筆都有可查的原因，例如土地或車位單獨交易、親友間特殊關係、預售屋分件登記、車位無法拆算。規則與取捨見 [docs/staging.md](docs/staging.md)。
+73,133 筆原始資料經 6 道規則篩出 30,756 筆合格房地交易，其中 23,716 筆為住宅。被排除的每一筆都有可查的原因，例如土地或車位單獨交易、親友間特殊關係、預售屋分件登記、車位無法拆算。每坪單價 =（總價 − 車位價）÷（建物面積 − 車位面積），不以任意價格門檻刪除離群值。
 
 ## 關鍵設計決策
 
@@ -60,11 +60,9 @@ flowchart LR
 - **獨立重算**：用 pandas 從 Silver 重算全部 Gold 彙總表，每一欄都與 dbt 結果一致；BigQuery 列數與官方 ZIP 逐季一致。
 - **GitHub Actions**：每次 push 與 PR 跑 lint 和 pytest；改到 dbt 的 PR 在真實 BigQuery 上跑 dbt（只建 view、碰不到正式資料）；每天重建儀表板，任何查詢錯誤都不會發布。
 
-細節見 [docs/quality.md](docs/quality.md)。
-
 ## 如何重現
 
-需要：Python 3.12 與 [uv](https://docs.astral.sh/uv/)、一個 GCP 專案（BigQuery sandbox 即可）、以 `gcloud auth application-default login` 登入。GCP 專案 ID `taiwan-household` 目前直接寫在 dbt profiles、載入器、dbt source 與儀表板的設定中，用自己的專案重現時要全域取代。詳細步驟見 [docs/local_environment.md](docs/local_environment.md)。
+需要：Python 3.12 與 [uv](https://docs.astral.sh/uv/)、一個 GCP 專案（BigQuery sandbox 即可）、以 `gcloud auth application-default login` 登入。GCP 專案 ID `taiwan-household` 目前直接寫在 dbt profiles、載入器、dbt source 與儀表板的設定中，用自己的專案重現時要全域取代。
 
 ```bash
 uv venv --python 3.12
@@ -80,7 +78,14 @@ python -m scripts.verify_bigquery
 pytest -q && ruff check . && black --check .
 ```
 
-Windows 先執行 `.venv\Scripts\Activate.ps1`，macOS／Linux 執行 `source .venv/bin/activate`。每日排程見 [docs/airflow.md](docs/airflow.md)，儀表板本機開發見 [docs/dashboard.md](docs/dashboard.md)。
+Windows 先執行 `.venv\Scripts\Activate.ps1`，macOS／Linux 執行 `source .venv/bin/activate`。
+
+```bash
+# 每日排程（Docker）：先複製 orchestration/.env.example 為 .env 並填入 ADC 路徑，介面在 http://localhost:8081
+docker compose --env-file orchestration/.env -f orchestration/compose.yml up -d
+# 儀表板本機開發（Node 18 以上）
+cd dashboard && npm ci && npm run sources:strict && npm run dev
+```
 
 ## 專案結構
 
@@ -94,16 +99,6 @@ infra/               GCP Workload Identity Federation 一次性設定腳本
 tests/               pytest
 .github/workflows/   CI、dbt CI、儀表板發布
 ```
-
-| 文件 | 內容 |
-| --- | --- |
-| [raw_loading.md](docs/raw_loading.md) | 官方下載、驗證、每季一表、表到期與重建 |
-| [staging.md](docs/staging.md) | 分析期間的依據、排除規則與取捨 |
-| [marts.md](docs/marts.md) | Gold 交易明細與彙總表的口徑、樣本門檻 |
-| [airflow.md](docs/airflow.md) | 每日判斷規則、DAG 流程、重試策略、Docker 啟動 |
-| [quality.md](docs/quality.md) | 驗證結果與 GitHub Actions |
-| [ci_dbt.md](docs/ci_dbt.md) | CI 以 WIF 跑 dbt：權限設計、一次性設定 |
-| [dashboard.md](docs/dashboard.md) | 儀表板頁面、公開資料範圍、唯讀權限、一次性設定 |
 
 ## 限制與下一步
 

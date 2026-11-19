@@ -1,4 +1,4 @@
-# Evidence 40.1.8 (legacy npm release, pinned on purpose; see docs/dashboard.md)
+# Evidence 40.1.8 (legacy npm release, pinned on purpose)
 deployment:
   # GitHub Pages project site: https://chengpeter88.github.io/taiwan-housing-pipeline/
   basePath: /taiwan-housing-pipeline
