@@ -10,3 +10,8 @@ analytics_bigquery/logs/
 *.zip
 orchestration/.env
 
+
+# Personal / machine-specific files (kept locally, not shared)
+.vscode/
+analytics_bigquery/.user.yml
+scripts/activate.ps1

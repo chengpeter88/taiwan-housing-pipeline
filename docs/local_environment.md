@@ -2,19 +2,20 @@
 
 專案統一使用 `.venv`。Python 3.12 取代已不受目前 Google client 支援的 Python 3.10。依賴清單在 `requirements.txt`，跨平台解析的固定版本在 `requirements.lock`；由 uv 安裝。
 
-## 現有電腦啟用
+## 需要的工具
+
+- Python 3.12（`.python-version`）與 [uv](https://docs.astral.sh/uv/)
+- [Google Cloud CLI](https://cloud.google.com/sdk/docs/install)：建立本機 ADC 用
+- Docker Desktop：只有本機跑 Airflow 時需要
 
 ```powershell
-cd E:\coding\taiwan-housing-pipeline
-. .\scripts\activate.ps1
+.venv\Scripts\Activate.ps1   # Linux／macOS：source .venv/bin/activate
 python --version
 uv pip check
 gcloud --version
 ```
 
-啟用腳本只調整目前 PowerShell 的 PATH 與 uv cache，並啟用原 `.venv`。VS Code 開啟本專案資料夾時，設定預設解譯器為 `.venv/Scripts/python.exe`，新終端機可找到 gcloud。若 VS Code 已記住其他解譯器，需手動重新選擇這個路徑。
-
-Google Cloud CLI 安裝在 `E:/coding/tools/google-cloud-sdk`，版本 593.0.0；來源是 Google 官方 Windows ZIP，下載後驗證官方 SHA256。Python 3.12 安裝在 `E:/coding/tools/python`。這些工具不屬於 Git 專案內容。
+各工具的安裝位置、PATH 與編輯器設定屬於個人環境，不放進 Git（`.vscode/`、本機啟用腳本已列在 `.gitignore`）。
 
 ## 依賴用途
 

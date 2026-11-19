@@ -1,8 +1,0 @@
-{
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
-  "python.terminal.activateEnvironment": true,
-  "terminal.integrated.env.windows": {
-    "PATH": "E:\\coding\\tools\\google-cloud-sdk\\bin;${env:PATH}",
-    "UV_CACHE_DIR": "E:\\coding\\.uv-cache"
-  }
-}
