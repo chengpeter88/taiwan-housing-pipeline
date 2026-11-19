@@ -54,11 +54,7 @@ flowchart LR
 | 免費版儲存是終身 10 GiB，刪除也不退 | CI 一律建 view，只有正式層建 table | CI 每次執行幾乎不佔儲存 |
 | repo 公開，不能放任何金鑰 | GitHub Actions 以 Workload Identity Federation 換 1 小時憑證；CI 與儀表板各用最小權限的帳號 | 0 把存放的金鑰；儀表板帳號只能讀 Gold、只限 main 分支 |
 
-## 品質與自動化
 
-- **234 項自動化檢查**：pytest 150 項（下載、驗證、排程判斷、CI 與儀表板設定）＋ dbt 84 項（11 組手算 unit test、唯一鍵、交叉對帳）。
-- **獨立重算**：用 pandas 從 Silver 重算全部 Gold 彙總表，每一欄都與 dbt 結果一致；BigQuery 列數與官方 ZIP 逐季一致。
-- **GitHub Actions**：每次 push 與 PR 跑 lint 和 pytest；改到 dbt 的 PR 在真實 BigQuery 上跑 dbt（只建 view、碰不到正式資料）；每天重建儀表板，任何查詢錯誤都不會發布。
 
 ## 如何重現
 
@@ -100,12 +96,6 @@ tests/               pytest
 .github/workflows/   CI、dbt CI、儀表板發布
 ```
 
-## 限制與下一步
-
-- **排程跑在本機 Docker**：電腦關機時不會執行；下一步是遷到雲端排程並加上失敗通知。
-- **只有成交中位數**：無法區分真漲價與成交組合變化；下一步是建立品質調整指數（控制屋齡、坪數、型態、樓層）。
-- **只有臺北、只有主表**：建物、土地、車位子表未 join，避免一對多造成總價重複；下一步是參數化擴充其他縣市。
-- **儀表板使用 Evidence 40.1.8**：npm 版已停止更新，目前鎖定版本使用。
 
 ## 資料來源與授權
 
