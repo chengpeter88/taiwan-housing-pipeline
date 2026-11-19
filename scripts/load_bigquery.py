@@ -20,8 +20,6 @@ import requests
 from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
-from scripts.profile_dataset import read_sales
-
 ROOT = Path(__file__).resolve().parents[1]
 LOGGER = logging.getLogger(__name__)
 
@@ -40,10 +38,62 @@ SALES_PERIOD_PATTERN = re.compile(
     r'(\d+)\s*年\s*(\d+)\s*月\s*(\d+)\s*日?\s*之買賣案件'
 )
 COLUMN_TYPES = {'source_row_number': 'INTEGER', 'loaded_at': 'TIMESTAMP'}
+# 讀檔時必須存在的官方欄位；完整欄位另由 config/column_mapping.json 檢查
+NUMERIC_COLUMNS = [
+    '總價元',
+    '建物移轉總面積平方公尺',
+    '車位總價元',
+    '車位移轉總面積平方公尺',
+    '單價元平方公尺',
+]
+REQUIRED_COLUMNS = [
+    '編號',
+    '交易標的',
+    '交易年月日',
+    '備註',
+    '主要用途',
+    '車位類別',
+] + NUMERIC_COLUMNS
 
 
 class SourceValidationError(ValueError):
     """來源資料的確定性錯誤；重試也不會成功，呼叫端應停止而非重試。"""
+
+
+def read_sales(payload: bytes) -> tuple[pd.DataFrame, str]:
+    """把官方買賣 CSV 讀成全字串的 DataFrame。
+
+    依序嘗試 utf-8-sig、cp950、big5。官方檔第二列是英文欄名，確認內容後才略過，
+    不盲目跳過第一筆資料。
+
+    Args:
+        payload: CSV 原始位元組。
+
+    Returns:
+        (DataFrame, 實際使用的編碼)。
+
+    Raises:
+        ValueError: 編碼無法辨識、缺少必要欄位、沒有資料或有欄位不齊的列。
+    """
+    for encoding in ('utf-8-sig', 'cp950', 'big5'):
+        try:
+            text = payload.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        raise ValueError('Unsupported CSV encoding')
+    df = pd.read_csv(io.StringIO(text), dtype='string', keep_default_na=False)
+    missing = set(REQUIRED_COLUMNS) - set(df.columns)
+    if missing:
+        raise ValueError(f'Missing columns: {sorted(missing)}')
+    if not df.empty and df.iloc[0]['編號'].strip().lower() == 'serial number':
+        df = df.iloc[1:]
+    if df.empty:
+        raise ValueError('Empty sales file')
+    if df.isna().any().any():
+        raise ValueError('Malformed CSV: rows with missing fields')
+    return df.reset_index(drop=True), encoding
 
 
 def parse_season(season: str) -> tuple[int, int]:

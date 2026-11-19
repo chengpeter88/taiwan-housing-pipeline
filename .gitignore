@@ -15,3 +15,7 @@ orchestration/.env
 .vscode/
 analytics_bigquery/.user.yml
 scripts/activate.ps1
+docs/looker_studio.md
+docs/dataset_review.md
+scripts/profile_dataset.py
+tests/test_profile_dataset.py

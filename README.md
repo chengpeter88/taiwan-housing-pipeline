@@ -65,8 +65,6 @@ Linux／macOS 改用 `.venv/bin/python`。
 | [docs/marts.md](docs/marts.md) | 交易明細與行政區月中位數、驗證結果 |
 | [docs/airflow.md](docs/airflow.md) | DAG 流程、重試策略、Docker 啟動與驗收紀錄 |
 | [docs/ci_dbt.md](docs/ci_dbt.md) | CI 以 Workload Identity Federation 跑 dbt：權限設計、一次性設定、失敗判斷 |
-| [docs/looker_studio.md](docs/looker_studio.md) | Looker Studio 報表建置規格：資料來源、欄位設定、5 頁版面、分享與維護 |
-| [docs/dataset_review.md](docs/dataset_review.md) | 單季資料盤點（清理規則的推導依據，歷史紀錄） |
 
 ## 清理規則與取捨
 
@@ -84,9 +82,9 @@ Linux／macOS 改用 `.venv/bin/python`。
 
 ## 驗證與 CI
 
-2026-11-17 驗證結果：
+2026-11-19 驗證結果：
 
-- pytest 103 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性、每日排程的新季別偵測、截止日規則與執行判斷。
+- pytest 133 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性、每日排程的新季別偵測、截止日規則與執行判斷、BigQuery 實況驗證、CI 權限與 workflow 設定。
 - `dbt build` 84 項通過（8 個模型）：11 組 unit tests 以手算的小資料覆蓋 12 種排除原因、6 位數日期、屋齡週年邊界、分組邊界、精確分位數、年增率、滾動中位數與 NULL 處理；其餘資料測試涵蓋唯一鍵、允許值、季別完整性、各表與 fact 及月表的交叉對帳、價格公式與分位數順序。
 - BigQuery 12 張季表的列數與官方 ZIP 逐季一致；pandas 從 Silver 獨立重算 fact 衍生欄位與全部 Gold 彙總表，每一欄都完全一致。
 - Airflow 3.4.0 容器：12 季全量執行成功、同參數重跑筆數不變、未發布與格式錯誤的季別在對應任務失敗且不重試。
@@ -104,7 +102,7 @@ Linux／macOS 改用 `.venv/bin/python`。
 
 | 下一步 | 完成標準 |
 | --- | --- |
-| 展示 | 依 [looker_studio.md](docs/looker_studio.md) 建立 Looker Studio 報表並分享 |
+| 展示 | 以 Evidence 建立儀表板（SQL 讀 `housing_gold`），由 GitHub Actions 建置並發布到 GitHub Pages |
 | 失敗通知 | 排程失敗時通知（Email 或其他管道） |
 | 擴充範圍 | 其他縣市；評估是否納入子表 |
 
@@ -112,6 +110,6 @@ Linux／macOS 改用 `.venv/bin/python`。
 
 - 資料提供者：內政部地政司；[開放資料下載頁](https://plvr.land.moi.gov.tw/DownloadOpenData)。
 - [非本期實價批次資料 18703](https://data.gov.tw/dataset/18703)：官方標示免費、政府資料開放授權條款第 1 版。
-- [政府資料開放授權條款第 1 版](https://data.gov.tw/license)。本作品是清理與彙總後的衍生分析，不代表政府官方統計或樂屋網產品。
+- [政府資料開放授權條款第 1 版](https://data.gov.tw/license)。本作品是清理與彙總後的衍生分析，不代表政府官方統計。
 
-原始資料、測試暫存及執行產物不納入 Git；測試資料由程式產生。未宣稱樂屋網使用任何特定雲端或資料平台。
+原始資料、測試暫存及執行產物不納入 Git；測試資料由程式產生。
