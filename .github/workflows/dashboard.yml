@@ -1,0 +1,82 @@
+name: Dashboard
+# Builds the Evidence dashboard from housing_gold and publishes it to GitHub Pages.
+# Auth: Workload Identity Federation; the dashboard account can only read housing_gold and only
+# from the main branch. Pull requests never trigger this workflow (public repository).
+# Setup and failure diagnosis: docs/dashboard.md
+on:
+  push:
+    branches: [main]
+    paths:
+      - dashboard/**
+      - .github/workflows/dashboard.yml
+  schedule:
+    # 14:30 Asia/Taipei, after the daily Airflow check at 12:00
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: dashboard
+    env:
+      EVIDENCE_BUILD_DIR: ./build/taiwan-housing-pipeline
+      SEND_ANONYMOUS_USAGE_STATS: 'no'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check repository variables
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          DASHBOARD_SERVICE_ACCOUNT: ${{ vars.GCP_DASHBOARD_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DASHBOARD_SERVICE_ACCOUNT" ]; then
+            echo "::error::Set repository variables GCP_WIF_PROVIDER and GCP_DASHBOARD_SERVICE_ACCOUNT (repository_id=${{ github.repository_id }}, see docs/dashboard.md)"
+            exit 1
+          fi
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DASHBOARD_SERVICE_ACCOUNT }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.23.5
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - name: Query housing_gold (fails on any source error)
+        run: npm run sources:strict
+      - name: Build static site (fails on any page query error)
+        # build:strict still exits 0 when a page query fails (Evidence 40.1.8), so the log is
+        # checked too. shell: bash enables pipefail, so tee does not hide npm's exit code.
+        shell: bash
+        run: |
+          npm run build:strict 2>&1 | tee build.log
+          if grep -n "Error in Query" build.log; then
+            echo "::error::A dashboard page query failed; see the lines above"
+            exit 1
+          fi
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dashboard/build/taiwan-housing-pipeline
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

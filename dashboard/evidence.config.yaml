@@ -1,0 +1,14 @@
+# Evidence 40.1.8 (legacy npm release, pinned on purpose; see docs/dashboard.md)
+deployment:
+  # GitHub Pages project site: https://chengpeter88.github.io/taiwan-housing-pipeline/
+  basePath: /taiwan-housing-pipeline
+
+appearance:
+  default: light
+  switcher: true
+
+plugins:
+  components:
+    "@evidence-dev/core-components": {}
+  datasources:
+    "@evidence-dev/bigquery": {}

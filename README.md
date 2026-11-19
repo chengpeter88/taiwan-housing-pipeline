@@ -2,6 +2,8 @@
 
 把內政部買賣實價登錄季檔轉成可重跑、有品質檢查、可解釋的行政區房價分析。這是求職作品，聚焦資料工程與分析工程：官方下載與驗證、BigQuery 載入、dbt 分層與測試、Airflow 排程。
 
+儀表板：https://chengpeter88.github.io/taiwan-housing-pipeline/ （每天由 GitHub Actions 讀 `housing_gold` 重建，見 [docs/dashboard.md](docs/dashboard.md)）。
+
 目前範圍：台北市買賣，112S4–115S3 共 12 季（73,133 列），分析期間 2023-10-01 ~ 2026-03-31。季別與分析期間只在 [config/seasons.json](config/seasons.json) 設定一次。
 
 ## 架構
@@ -12,7 +14,8 @@ flowchart LR
     B --> C[Bronze: housing_bronze<br>lvr_season_a_季別 ×12]
     C --> D[Silver: housing_silver<br>stg_lvr_sale]
     D --> E[Gold: housing_gold<br>fct_housing_deal]
-    E --> F[Gold: housing_gold<br>agg_district_month_price]
+    E --> F[Gold: housing_gold<br>agg_* 彙總表]
+    F --> H[儀表板<br>Evidence → GitHub Pages]
     G[Airflow DAG<br>每日自動判斷] -.-> B
     G -.-> D
 ```
@@ -65,6 +68,7 @@ Linux／macOS 改用 `.venv/bin/python`。
 | [docs/marts.md](docs/marts.md) | 交易明細與行政區月中位數、驗證結果 |
 | [docs/airflow.md](docs/airflow.md) | DAG 流程、重試策略、Docker 啟動與驗收紀錄 |
 | [docs/ci_dbt.md](docs/ci_dbt.md) | CI 以 Workload Identity Federation 跑 dbt：權限設計、一次性設定、失敗判斷 |
+| [docs/dashboard.md](docs/dashboard.md) | 公開儀表板：頁面、唯讀權限、公開資料範圍、一次性設定、失敗判斷 |
 
 ## 清理規則與取捨
 
@@ -84,7 +88,7 @@ Linux／macOS 改用 `.venv/bin/python`。
 
 2026-11-19 驗證結果：
 
-- pytest 133 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性、每日排程的新季別偵測、截止日規則與執行判斷、BigQuery 實況驗證、CI 權限與 workflow 設定。
+- pytest 150 項通過：季別解析、官方下載（含未發布季別回 HTML、超過上限）、快取、12 季真實 `build_time.xml` 的登記期間、ZIP 與欄位驗證、載入與列數核對、dataset 自動建立、CLI exit code、設定與分層一致性、每日排程的新季別偵測、截止日規則與執行判斷、BigQuery 實況驗證、CI 權限與 workflow 設定、儀表板的公開範圍、權限與統計口徑。
 - `dbt build` 84 項通過（8 個模型）：11 組 unit tests 以手算的小資料覆蓋 12 種排除原因、6 位數日期、屋齡週年邊界、分組邊界、精確分位數、年增率、滾動中位數與 NULL 處理；其餘資料測試涵蓋唯一鍵、允許值、季別完整性、各表與 fact 及月表的交叉對帳、價格公式與分位數順序。
 - BigQuery 12 張季表的列數與官方 ZIP 逐季一致；pandas 從 Silver 獨立重算 fact 衍生欄位與全部 Gold 彙總表，每一欄都完全一致。
 - Airflow 3.4.0 容器：12 季全量執行成功、同參數重跑筆數不變、未發布與格式錯誤的季別在對應任務失敗且不重試。
@@ -92,6 +96,8 @@ Linux／macOS 改用 `.venv/bin/python`。
 `.github/workflows/ci.yml` 在 push 到 main 與每個 PR 時依序執行 `ruff check`、`black --check` 與 pytest，不下載官方檔，也不需要雲端金鑰。格式與 lint 設定在 `pyproject.toml`（行寬 100、保留單引號）。
 
 `.github/workflows/dbt-ci.yml` 在 PR 改到 dbt 相關檔案時，以 Workload Identity Federation 取得短期憑證，對真實 BigQuery 執行 `dbt build --target ci`。模型一律建成 view，寫入 `ci_housing_*`；CI 帳號對正式 silver／gold 沒有任何權限，最後一步會實際嘗試寫入並確認被拒絕。設定與失敗判斷見 [docs/ci_dbt.md](docs/ci_dbt.md)。
+
+`.github/workflows/dashboard.yml` 在 main 的儀表板變更、每天台北 14:30 與手動觸發時，以只能讀 `housing_gold`、且只限 main 分支的 `dashboard-reader` 帳號建置 Evidence 網站並發布到 GitHub Pages；PR 不會觸發。任何查詢錯誤都會讓建置失敗，網站保留上一版。
 
 ## 限制與下一步
 
@@ -102,7 +108,6 @@ Linux／macOS 改用 `.venv/bin/python`。
 
 | 下一步 | 完成標準 |
 | --- | --- |
-| 展示 | 以 Evidence 建立儀表板（SQL 讀 `housing_gold`），由 GitHub Actions 建置並發布到 GitHub Pages |
 | 失敗通知 | 排程失敗時通知（Email 或其他管道） |
 | 擴充範圍 | 其他縣市；評估是否納入子表 |
 

@@ -1,0 +1,8 @@
+# No key in this file: gcloud-cli hands auth to Application Default Credentials.
+# Local: gcloud auth application-default login. CI: Workload Identity Federation.
+name: housing
+type: bigquery
+options:
+  project_id: taiwan-household
+  location: US
+  authenticator: gcloud-cli

@@ -24,7 +24,7 @@ dataset 名稱由 [generate_schema_name](../analytics_bigquery/macros/generate_s
    bash setup_wif.sh <repository_id>
    ```
 
-   腳本可重複執行；最後印出 CI 帳號擁有的全部權限，應該只有：`project: roles/bigquery.jobUser`、`housing_bronze: READER`、`ci_housing_silver: WRITER`、`ci_housing_gold: WRITER`。
+   腳本可重複執行；最後印出每個帳號擁有的全部權限，`dbt-ci` 應該只有：`project roles/bigquery.jobUser`、`housing_bronze: READER`、`ci_housing_silver: WRITER`、`ci_housing_gold: WRITER`。同一支腳本也建立儀表板用的唯讀帳號 `dashboard-reader`（見 [dashboard.md](dashboard.md)）。
 3. **GitHub repo 變數**：Settings → Secrets and variables → Actions → **Variables**，新增腳本最後印出的 `GCP_WIF_PROVIDER` 與 `GCP_CI_SERVICE_ACCOUNT`。這兩個值不是機密，所以放 Variables 而不是 Secrets。
 4. 回到 Actions 再跑一次「dbt CI」，應該全部通過。
 

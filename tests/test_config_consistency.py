@@ -1,6 +1,7 @@
 """確保季別清單與分析期間只有一個真相來源：config/seasons.json。"""
 
 import json
+import re
 from pathlib import Path
 
 import yaml
@@ -258,9 +259,14 @@ def test_setup_wif_script_grants_least_privilege():
     assert 'roles/bigquery.jobUser' in script
     for role in FORBIDDEN_ROLES:
         assert role not in script
-    # dataset 層授權：bronze 只讀、ci_* 可寫；正式 silver／gold 不給任何權限
-    assert 'grant_dataset housing_bronze READER' in script
-    assert 'grant_dataset ci_housing_silver WRITER' in script
-    assert 'grant_dataset ci_housing_gold WRITER' in script
-    for prod in ['grant_dataset housing_silver', 'grant_dataset housing_gold']:
-        assert prod not in script
+    # dataset 層授權：CI 帳號 bronze 只讀、ci_* 可寫；正式 silver／gold 不給任何權限
+    ci_grants = re.findall(r'grant_dataset "\$\{CI_SA_EMAIL\}" .+', script)
+    assert ci_grants == [
+        'grant_dataset "${CI_SA_EMAIL}" housing_bronze READER',
+        'grant_dataset "${CI_SA_EMAIL}" ci_housing_silver WRITER',
+        'grant_dataset "${CI_SA_EMAIL}" ci_housing_gold WRITER',
+    ]
+    # 函式不得再偷用全域帳號變數，否則新增的授權會落到錯的帳號
+    body = script[script.index('grant_dataset() {') :]
+    body = body[: body.index('\n}\n')]
+    assert '_SA_EMAIL' not in body

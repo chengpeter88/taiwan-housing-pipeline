@@ -19,3 +19,12 @@ docs/looker_studio.md
 docs/dataset_review.md
 scripts/profile_dataset.py
 tests/test_profile_dataset.py
+
+# Evidence dashboard build artifacts (dashboard/)
+dashboard/node_modules/
+dashboard/build/
+dashboard/.evidence/template/
+dashboard/.evidence/meta/
+dashboard/.svelte-kit/
+dashboard/static/data/
+*.options.yaml
