@@ -41,6 +41,17 @@ CI 讀的是正式的 `housing_bronze`，所以失敗不一定是 PR 的 SQL 有
 | auth 步驟 `Permission denied` | provider 條件或 workloadIdentityUser 綁定不符 | 用正確的 repository_id 重新執行設定腳本 |
 | `check_ci_permissions` 失敗 | CI 帳號被多給了正式 dataset 的權限 | 移除多餘權限 |
 
+## 驗收紀錄（2026-11-19）
+
+| 項目 | 結果 |
+| --- | --- |
+| 變數未設定 | 「Check repository variables」失敗並印出 repository_id，後續步驟未執行 |
+| GCP 設定腳本 | 權限稽核只有 `project: roles/bigquery.jobUser`、`housing_bronze: READER`、`ci_housing_silver: WRITER`、`ci_housing_gold: WRITER` |
+| 手動觸發 dbt CI | 成功：WIF 驗證、dbt build、正式 dataset 寫入探測皆被拒 |
+| BigQuery 查核 | `ci_housing_silver` 1 個、`ci_housing_gold` 7 個物件全部是 VIEW，儲存 0 bytes；`ci_housing_gold.fct_housing_deal` 30,756 列，與正式表相同；正式 silver／gold 的修改時間未變，沒有殘留探測表；`verify_bigquery` 通過 |
+
+注意：設定的是 **Repository variables**，不是 Secrets，也不是 Environment variables，否則 workflow 讀不到。
+
 ## 成本
 
 - 查詢：每次 build 掃描量為 MB 級，sandbox 每月 1 TiB 查詢免費。
